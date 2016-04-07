@@ -1,7 +1,7 @@
-FEM Solver &mdash; Finite Elementh Method PDE Solver
+FEM Solver &mdash; Finite Element Method PDE Solver
 ====================================================
 
-This program is a simple solver employing the [Finite Element Method (FEM)](https://en.wikipedia.org/wiki/Finite_element_method) to solve certain families of second order linear PDE boundary value problems with mixed conditions.
+This program is a simple prototype of a solver, employing the [Finite Element Method (FEM)](https://en.wikipedia.org/wiki/Finite_element_method) to solve some families of second order linear PDE boundary value problems with mixed conditions.
 
 It is implemented in [Julia](http://julialang.org/) using [matplotlib](http://matplotlib.org/).
 

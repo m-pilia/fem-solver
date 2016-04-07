@@ -122,11 +122,7 @@ end
 
 # Neumann conditions
 for i in 1:height(N)
-    p1 = p[N[i,1],:];
-    p2 = p[N[i,2],:];
-    for j in 1:2
-        b[N[i,j]] += norm(p1 - p2) * 0.5 * (g1[p1] + g1[p2]);
-    end
+    b[N[i,:]] += norm(p[N[i,1],:] - p[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
 end
 
 # Dirichlet conditions

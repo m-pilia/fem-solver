@@ -14,7 +14,10 @@
 # Copyright © 2016 Martino Pilia <martino.pilia@gmail.com>
 
 include("support.jl");
+include("assembly.jl");
+
 using Support;
+using Assembly;
 
 # read grid vertices
 const p = readArray("sample_problem_01/coordinates.dat");
@@ -41,93 +44,15 @@ const c = 2;
 # right-hand function
 f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
-# triangle constant matrices
-const M0_3 = 1.0/24.0 * [
-    2 1 1
-    1 2 1
-    1 1 2
-];
+# system assembly
+W, M, b = assembly2D(p, t, q, f, D, g0, N, g1);
 
-# triangle local stiffness
-function W3(T::F64Mat)
-    const a = T[1,1];
-    const b = T[1,2];
-    const c = T[2,2];
-    return 1.0/2.0 * [
-        a+2*b+c  -a-b  -b-c
-        -a-b     a     b
-        -b-c     b     c
-    ];
-end
-
-# parallelogram constant matrices
-const M0_4 = 1.0/9.0 * [
-    4 2 1 2
-    2 4 2 1
-    1 2 4 2
-    2 1 2 4
-];
-
-# parallelogram local stiffness
-function W4(T::F64Mat)
-    const a = T[1,1];
-    const b = T[1,2];
-    const c = T[2,2];
-    return 1.0/6.0 * [
-        3*b+2*(a+c)  -2*a+c        -3*b-(a+c)   a-2*c
-        -2*a+c       -3*b+2*(a+c)  a-2*c        3*b-(a+c)
-        -3*b-(a+c)   a-2*c         3*b+2*(a+c)  -2*a+c
-        a-2*c        3*b-(a+c)     -2*a+c       -3*b+2*(a+c)
-    ];
-end
-
-# jacobian matrix for the i-th triangle
-function J(i::Int64, t::I64Mat, p::F64Mat)
-    return [p[t[i,2],:]-p[t[i,1],:]; p[t[i,size(t)[2]],:]-p[t[i,1],:]]';
-end
-
-const n = height(p);
-const W = spzeros(n, n);
-const M = spzeros(n, n);
-const b = spzeros(n, 1);
-const u = spzeros(n, 1);
-
-# triangle assembling
-for k in 1:height(t)
-    Jk = J(k, t, p);
-    djk = abs(det(Jk));
-    Wk = djk * W3(inv(Jk' * Jk));
-    Mk = djk * M0_3;
-    W[vec(t[k,:]),vec(t[k,:])] += Wk[:,:];
-    M[vec(t[k,:]),vec(t[k,:])] += Mk[:,:];
-end
-
-# parallelogram assembling
-for k in 1:height(q)
-    Jk = J(k, q, p);
-    djk = abs(det(Jk));
-    Wk = djk * W4(inv(Jk' * Jk));
-    Mk = djk * M0_4;
-    W[vec(q[k,:]),vec(q[k,:])] += Wk[:,:];
-    M[vec(q[k,:]),vec(q[k,:])] += Mk[:,:];
-end
-
-# known data 
-for k in 1:height(t)
-    b[t[k,:]] += abs(det(J(k, t, p))) / 18.0 * sum(i -> f(p[t[k,i],:]), 1:3);
-end
-for k in 1:height(q)
-    b[q[k,:]] += abs(det(J(k, q, p))) / 12.0 * sum(i -> f(p[q[k,i],:]), 1:4);
-end
-
-# Neumann conditions
-for i in 1:height(N)
-    b[N[i,:]] += norm(p[N[i,1],:] - p[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
-end
+# variable for the solution
+const u = spzeros(height(p), 1);
 
 # Dirichlet conditions
 u[dir] = sparse(g0)[dir];
-b[ind] -= (W[ind,dir] + c *  M[ind,dir]) * u[dir];
+b[ind] -= (W[ind,dir] + c * M[ind,dir]) * u[dir];
 
 # solve the system
 u[ind] = (W[ind,ind] + c * M[ind,ind]) \ b[ind];

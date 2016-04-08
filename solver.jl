@@ -20,11 +20,11 @@ using Support;
 using Assembly;
 
 # read grid vertices
-const p = readArray("sample_problem_01/coordinates.dat");
+const P = readArray("sample_problem_01/coordinates.dat");
 
 # read elements
-const t = readArray("sample_problem_01/elements3.dat", ty=Int64);
-const q = readArray("sample_problem_01/elements4.dat", ty=Int64);
+const T = readArray("sample_problem_01/elements3.dat", ty=Int64);
+const Q = readArray("sample_problem_01/elements4.dat", ty=Int64);
 
 # read boundary
 const D = readArray("sample_problem_01/dirichlet.dat", ty=Int64);
@@ -36,7 +36,7 @@ const g1 = readArray("sample_problem_01/neumann_values.dat");
 
 # compute dirichlet and independent nodes
 const dir = unique(D);
-const ind = setdiff(collect(1:height(p)), dir);
+const ind = setdiff(collect(1:height(P)), dir);
 
 # coefficient for the elliptic problem
 const c = 2;
@@ -45,11 +45,12 @@ const c = 2;
 f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
 # system assembly
-W, M = assembly2D_mat(p, t, q);
-b = assembly2D_vec(p, t, q, f, N, g1);
+W = assemblyStiffness2D(P, T, Q);
+M = assemblyMass2D(P, T, Q);
+b = assemblyVector2D(P, T, Q, f, N, g1);
 
 # variable for the solution
-const u = spzeros(height(p), 1);
+const u = spzeros(height(P), 1);
 
 # Dirichlet conditions
 u[dir] = sparse(g0)[dir];
@@ -63,4 +64,4 @@ using PyPlot;
 const Poly3DCollection = PyPlot.mplot3d[:art3d][:Poly3DCollection];
 fig = figure();
 ax = Axes3D(fig);
-ax[:plot_trisurf](p[:,1], p[:,2], full(u)[:],cmap=get_cmap("jet"),linewidth=.1);
+ax[:plot_trisurf](P[:,1], P[:,2], full(u)[:],cmap=get_cmap("jet"),linewidth=.1);

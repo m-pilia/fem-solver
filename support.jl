@@ -15,8 +15,8 @@
 
 module Support
 
-export I64Mat, F32Mat, F64Mat
-export height, width, readArray
+export I64Mat, F32Mat, F64Mat;
+export height, width, readArray;
 
 # types for matrices
 const I64Mat = Array{Int64,2};

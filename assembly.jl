@@ -17,7 +17,7 @@ module Assembly
 
 using Support;
 
-export assembly2D_vec, assembly2D_mat;
+export assemblyMass2D, assemblyStiffness2D, assemblyVector2D;
 
 # reference triangle mass
 const M0_3 = 1.0/24.0 * [
@@ -64,31 +64,43 @@ function J(i::Int64, t::I64Mat, p::F64Mat)
     return [p[t[i,2],:]-p[t[i,1],:]; p[t[i,size(t)[2]],:]-p[t[i,1],:]]';
 end
 
-function assembly2D_mat(p, t, q)
+function assemblyMass2D(p, t, q)
     const n = height(p);
-    const W = spzeros(n, n);
     const M = spzeros(n, n);
 
     # triangle assembling
     for k in 1:height(t)
+        M[vec(t[k,:]),vec(t[k,:])] += abs(det(J(k, t, p))) * M0_3;
+    end
+
+    # parallelogram assembling
+    for k in 1:height(q)
+        M[vec(q[k,:]),vec(q[k,:])] += abs(det(J(k, q, p))) * M0_4;
+    end
+
+    return M;
+end
+
+function assemblyStiffness2D(p, t, q)
+    const n = height(p);
+    const W = spzeros(n, n);
+
+    # triangle assembling
+    for k in 1:height(t)
         Jk = J(k, t, p);
-        djk = abs(det(Jk));
-        W[vec(t[k,:]),vec(t[k,:])] += djk * W3(inv(Jk' * Jk));
-        M[vec(t[k,:]),vec(t[k,:])] += djk * M0_3;
+        W[vec(t[k,:]),vec(t[k,:])] += abs(det(Jk)) * W3(inv(Jk' * Jk));
     end
 
     # parallelogram assembling
     for k in 1:height(q)
         Jk = J(k, q, p);
-        djk = abs(det(Jk));
-        W[vec(q[k,:]),vec(q[k,:])] += djk * W4(inv(Jk' * Jk));
-        M[vec(q[k,:]),vec(q[k,:])] += djk * M0_4;
+        W[vec(q[k,:]),vec(q[k,:])] += abs(det(Jk)) * W4(inv(Jk' * Jk));
     end
 
-    return W, M;
+    return W;
 end
 
-function assembly2D_vec(p, t, q, f, N=[], g1=[])
+function assemblyVector2D(p, t, q, f, N=[], g1=[])
     const b = spzeros(height(p), 1);
 
     # internal load 

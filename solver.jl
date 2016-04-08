@@ -45,7 +45,8 @@ const c = 2;
 f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
 # system assembly
-W, M, b = assembly2D(p, t, q, f, D, g0, N, g1);
+W, M = assembly2D_mat(p, t, q);
+b = assembly2D_vec(p, t, q, f, N, g1);
 
 # variable for the solution
 const u = spzeros(height(p), 1);

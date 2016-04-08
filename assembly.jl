@@ -17,7 +17,7 @@ module Assembly
 
 using Support;
 
-export assembly2D
+export assembly2D_vec, assembly2D_mat;
 
 # reference triangle mass
 const M0_3 = 1.0/24.0 * [
@@ -64,11 +64,10 @@ function J(i::Int64, t::I64Mat, p::F64Mat)
     return [p[t[i,2],:]-p[t[i,1],:]; p[t[i,size(t)[2]],:]-p[t[i,1],:]]';
 end
 
-function assembly2D(p, t, q, f, D, g0, N=[], g1=[])
+function assembly2D_mat(p, t, q)
     const n = height(p);
     const W = spzeros(n, n);
     const M = spzeros(n, n);
-    const b = spzeros(n, 1);
 
     # triangle assembling
     for k in 1:height(t)
@@ -86,7 +85,13 @@ function assembly2D(p, t, q, f, D, g0, N=[], g1=[])
         M[vec(q[k,:]),vec(q[k,:])] += djk * M0_4;
     end
 
-    # known data 
+    return W, M;
+end
+
+function assembly2D_vec(p, t, q, f, N=[], g1=[])
+    const b = spzeros(height(p), 1);
+
+    # internal load 
     for k in 1:height(t)
         b[t[k,:]] += abs(det(J(k,t,p))) / 18.0 * sum(i -> f(p[t[k,i],:]), 1:3);
     end
@@ -99,7 +104,7 @@ function assembly2D(p, t, q, f, D, g0, N=[], g1=[])
         b[N[i,:]] += norm(p[N[i,1],:] - p[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
     end
 
-    return W, M, b;
+    return b;
 end
 
 end

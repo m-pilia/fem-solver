@@ -15,9 +15,11 @@
 
 include("support.jl");
 include("assembly.jl");
+include("plotter.jl");
 
 using Support;
 using Assembly;
+using Plotter;
 
 # read grid vertices
 const P = readArray("sample_problem_01/coordinates.dat");
@@ -60,8 +62,5 @@ b[ind] -= (W[ind,dir] + c * M[ind,dir]) * u[dir];
 u[ind] = (W[ind,ind] + c * M[ind,ind]) \ b[ind];
 
 # plot
-using PyPlot;
-const Poly3DCollection = PyPlot.mplot3d[:art3d][:Poly3DCollection];
-fig = figure();
-ax = Axes3D(fig);
-ax[:plot_trisurf](P[:,1], P[:,2], full(u)[:],cmap=get_cmap("jet"),linewidth=.1);
+plotGraph3D(P, full(u));
+

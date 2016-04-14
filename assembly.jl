@@ -81,20 +81,20 @@ function assemblyMass2D(p, t, q)
     return M;
 end
 
-function assemblyStiffness2D(p, t, q)
+function assemblyStiffness2D(p, t, q, K=eye(width(p)))
     const n = height(p);
     const W = spzeros(n, n);
 
     # triangle assembling
     for k in 1:height(t)
         Jk = J(k, t, p);
-        W[vec(t[k,:]),vec(t[k,:])] += abs(det(Jk)) * W3(inv(Jk' * Jk));
+        W[vec(t[k,:]),vec(t[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
     end
 
     # parallelogram assembling
     for k in 1:height(q)
         Jk = J(k, q, p);
-        W[vec(q[k,:]),vec(q[k,:])] += abs(det(Jk)) * W4(inv(Jk' * Jk));
+        W[vec(q[k,:]),vec(q[k,:])] += abs(det(Jk)) * W4(inv(Jk'*inv(K')*Jk));
     end
 
     return W;

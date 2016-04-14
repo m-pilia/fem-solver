@@ -40,8 +40,8 @@ u0 = readArray("sample_problem_02/initial_distribution.dat");
 g0 = readArray("sample_problem_02/dirichlet_values.dat");
 g1 = readArray("sample_problem_02/neumann_values.dat");
 
-# read conductivity tensor
-const K = readArray("sample_problem_02/conductivity.dat");
+# diffusivity tensor
+const K = [0.5 0; 0 0.01];
 
 # compute dirichlet and independent nodes
 const dir = unique(D);
@@ -50,14 +50,11 @@ const ind = setdiff(collect(1:height(P)), dir);
 # finite time intervals
 const δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
-# conductivity
-const c = 0.5;
-
 # right-hand function
 f(p) = 0;
 
 # system assembly
-W = assemblyStiffness2D(P, T, Q);
+W = assemblyStiffness2D(P, T, Q, K);
 M = assemblyMass2D(P, T, Q);
 
 # variable for the solution
@@ -75,12 +72,12 @@ for k in 1:(length(t) - 1)
     # compute right-hand vector
     b_ = assemblyVector2D(P, T, Q, f, N, g1[:,k+1]);
     b[ind] += b_[ind];
-    b[ind] *= 0.5 * c * δ[k];
-    b[ind] += (M[ind,:] - 0.5 * c * δ[k] * W[ind,:]) * u[:,k];
+    b[ind] *= 0.5 * δ[k];
+    b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];
 
     # Dirichlet conditions
     if dir != []
-        b[ind] -= (M[ind,dir] + 0.5 * c * δ[k] * W[ind,dir]) * g0[dir,k+1];
+        b[ind] -= (M[ind,dir] + 0.5 * δ[k] * W[ind,dir]) * g0[dir,k+1];
         u[dir,k+1] = sparse(g0)[dir,k+1];
     end
 

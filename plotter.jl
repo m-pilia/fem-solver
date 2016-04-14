@@ -117,7 +117,7 @@ function plotAnimation3D(P, u, t; outFile="")
         # each vertex is a tuple of float coordinates
         pts = Array{Triangle}( 
             [ Array(FlTuple[ (tx[i+1], ty[i+1], u[i+1,τ]) for i in tr[t,:] ]) 
-            for t in 1:height(tr[:,1]) ] 
+              for t in 1:height(tr[:,1]) ] 
         );
 
         # set new vertex values in the graph

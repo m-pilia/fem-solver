@@ -22,26 +22,26 @@ using Assembly;
 using Plotter;
 
 # read grid vertices
-const P = readArray("sample_problem_01/coordinates.dat");
+P = readArray("sample_problem_01/coordinates.dat");
 
 # read elements
-const T = readArray("sample_problem_01/elements3.dat", ty=Int64);
-const Q = readArray("sample_problem_01/elements4.dat", ty=Int64);
+T = readArray("sample_problem_01/elements3.dat", ty=Int64);
+Q = readArray("sample_problem_01/elements4.dat", ty=Int64);
 
 # read boundary
-const D = readArray("sample_problem_01/dirichlet.dat", ty=Int64);
-const N = readArray("sample_problem_01/neumann.dat", ty=Int64);
+D = readArray("sample_problem_01/dirichlet.dat", ty=Int64);
+N = readArray("sample_problem_01/neumann.dat", ty=Int64);
 
 # read boundary conditions
-const g0 = readArray("sample_problem_01/dirichlet_values.dat");
-const g1 = readArray("sample_problem_01/neumann_values.dat");
+g0 = readArray("sample_problem_01/dirichlet_values.dat");
+g1 = readArray("sample_problem_01/neumann_values.dat");
 
 # compute dirichlet and independent nodes
-const dir = unique(D);
-const ind = setdiff(collect(1:height(P)), dir);
+dir = unique(D);
+ind = setdiff(collect(1:height(P)), dir);
 
 # coefficient for the elliptic problem
-const c = 2;
+c = 2;
 
 # right-hand function
 f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
@@ -52,10 +52,10 @@ M = assemblyMass2D(P, T, Q);
 b = assemblyVector2D(P, T, Q, f, N, g1);
 
 # variable for the solution
-const u = spzeros(height(P), 1);
+u = spzeros(height(P), 1);
 
 # Dirichlet conditions
-u[dir] = sparse(g0)[dir];
+u[dir] = g0[dir];
 b[ind] -= (W[ind,dir] + c * M[ind,dir]) * u[dir];
 
 # solve the system

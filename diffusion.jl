@@ -22,18 +22,18 @@ using Assembly;
 using Plotter;
 
 # read grid vertices
-const P = readArray("sample_problem_02/coordinates.dat");
+P = readArray("sample_problem_02/coordinates.dat");
 
 # read elements
-const T = readArray("sample_problem_02/elements3.dat", ty=Int64);
-const Q = readArray("sample_problem_02/elements4.dat", ty=Int64);
+T = readArray("sample_problem_02/elements3.dat", ty=Int64);
+Q = readArray("sample_problem_02/elements4.dat", ty=Int64);
 
 # read time partition
-const t = readArray("sample_problem_02/time.dat");
+t = readArray("sample_problem_02/time.dat");
 
 # read boundary
-const D = readArray("sample_problem_02/dirichlet.dat", ty=Int64);
-const N = readArray("sample_problem_02/neumann.dat", ty=Int64);
+D = readArray("sample_problem_02/dirichlet.dat", ty=Int64);
+N = readArray("sample_problem_02/neumann.dat", ty=Int64);
 
 # read boundary conditions
 u0 = readArray("sample_problem_02/initial_distribution.dat");
@@ -41,14 +41,14 @@ g0 = readArray("sample_problem_02/dirichlet_values.dat");
 g1 = readArray("sample_problem_02/neumann_values.dat");
 
 # diffusivity tensor
-const K = [0.5 0; 0 0.01];
+K = [0.5 0; 0 0.01];
 
 # compute dirichlet and independent nodes
-const dir = unique(D);
-const ind = setdiff(collect(1:height(P)), dir);
+dir = unique(D);
+ind = setdiff(collect(1:height(P)), dir);
 
 # finite time intervals
-const δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
+δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
 # right-hand function
 f(p) = 0;
@@ -59,7 +59,7 @@ M = assemblyMass2D(P, T, Q);
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
-const u = spzeros(height(P), height(t));
+u = spzeros(height(P), height(t));
 u[:,1] = sparse(u0);
 
 # Crank-Nicolson finite differences
@@ -70,7 +70,8 @@ for k in 1:(length(t) - 1)
     b = b_;
 
     # compute right-hand vector
-    b_ = assemblyVector2D(P, T, Q, f, N, g1[:,k+1]);
+    g1_ = N != [] ? g1[:,k+1] : [];
+    b_ = assemblyVector2D(P, T, Q, f, N, g1_);
     b[ind] += b_[ind];
     b[ind] *= 0.5 * δ[k];
     b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];
@@ -78,7 +79,7 @@ for k in 1:(length(t) - 1)
     # Dirichlet conditions
     if dir != []
         b[ind] -= (M[ind,dir] + 0.5 * δ[k] * W[ind,dir]) * g0[dir,k+1];
-        u[dir,k+1] = sparse(g0)[dir,k+1];
+        u[dir,k+1] = g0[dir,k+1];
     end
 
     # solution at the `k+1` timestep

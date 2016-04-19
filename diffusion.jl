@@ -1,3 +1,8 @@
+#=
+ = Solve a diffusion problem with constant anisotropic diffusivity over a 
+ = hybrid triangle-parallelogram mesh.
+ =#
+
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -87,5 +92,5 @@ for k in 1:(length(t) - 1)
 end
 
 # plot
-plotAnimation3D(P, full(u), t, outFile="heat.mp4");
+plotAnimation3D(P, full(u), t, outFile="diffusion.mp4");
 

@@ -19,14 +19,22 @@ using Support;
 
 export assemblyMass2D, assemblyStiffness2D, assemblyVector2D;
 
-# reference triangle mass
+#=
+ = Local mass matrix for triangular elements.
+ =#
 const M0_3 = 1.0/24.0 * [
     2 1 1
     1 2 1
     1 1 2
 ];
 
-# reference triangle stiffness
+#=
+ = Stiffness local matrix for triangular elements.
+ =
+ = @param T `inv(J' * inv(K) * J)`
+ = @return The local stiffness matrix for the element mapped from the reference 
+ =         element by J, with diffusivity K.
+ =#
 function W3(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
@@ -38,7 +46,9 @@ function W3(T::F64Mat)
     ];
 end
 
-# reference square mass
+#=
+ = Local mass matrix for parallelogram elements.
+ =#
 const M0_4 = 1.0/9.0 * [
     4 2 1 2
     2 4 2 1
@@ -46,7 +56,13 @@ const M0_4 = 1.0/9.0 * [
     2 1 2 4
 ];
 
-# reference square stiffness
+#=
+ = Stiffness local matrix for parallelogram elements.
+ =
+ = @param T `inv(J' * inv(K) * J)`
+ = @return The local stiffness matrix for the element mapped from the reference 
+ =         element by J, with diffusivity K.
+ =#
 function W4(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
@@ -59,61 +75,97 @@ function W4(T::F64Mat)
     ];
 end
 
-# jacobian matrix for the i-th triangle
-function J(i::Int64, t::I64Mat, p::F64Mat)
-    return [p[t[i,2],:]-p[t[i,1],:]; p[t[i,size(t)[2]],:]-p[t[i,1],:]]';
+#==
+ = Jacobian matrix for the i-th element.
+ = 
+ = @param i Index for the element.
+ = @param E Element list.
+ = @param P Points coordinates.
+ = @return Jacobian matrix for the transformation from `E` to the reference
+ =         element.
+ =#
+function J(i::Int64, E::I64Mat, P::F64Mat)
+    return [P[E[i,2],:]-P[E[i,1],:]; P[E[i,size(E)[2]],:]-P[E[i,1],:]]';
 end
 
-function assemblyMass2D(p, t, q)
-    const n = height(p);
+#==
+ = Assembly the mass matrix.
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @return The mass matrix for the grid.
+ =#
+function assemblyMass2D(P, T, Q)
+    const n = height(P);
     const M = spzeros(n, n);
 
     # triangle assembling
-    for k in 1:height(t)
-        M[vec(t[k,:]),vec(t[k,:])] += abs(det(J(k, t, p))) * M0_3;
+    for k in 1:height(T)
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J(k, T, P))) * M0_3;
     end
 
     # parallelogram assembling
-    for k in 1:height(q)
-        M[vec(q[k,:]),vec(q[k,:])] += abs(det(J(k, q, p))) * M0_4;
+    for k in 1:height(Q)
+        M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J(k, Q, P))) * M0_4;
     end
 
     return M;
 end
 
-function assemblyStiffness2D(p, t, q, K=eye(width(p)))
-    const n = height(p);
+#==
+ = Assembly the stiffness matrix.
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @param K Diffusivity tensor.
+ = @return The stiffness matrix for the grid.
+ =#
+function assemblyStiffness2D(P, T, Q, K=eye(width(P)))
+    const n = height(P);
     const W = spzeros(n, n);
 
     # triangle assembling
-    for k in 1:height(t)
-        Jk = J(k, t, p);
-        W[vec(t[k,:]),vec(t[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
+    for k in 1:height(T)
+        Jk = J(k, T, P);
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
     end
 
     # parallelogram assembling
-    for k in 1:height(q)
-        Jk = J(k, q, p);
-        W[vec(q[k,:]),vec(q[k,:])] += abs(det(Jk)) * W4(inv(Jk'*inv(K')*Jk));
+    for k in 1:height(Q)
+        Jk = J(k, Q, P);
+        W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(Jk)) * W4(inv(Jk'*inv(K')*Jk));
     end
 
     return W;
 end
 
-function assemblyVector2D(p, t, q, f, N=[], g1=[])
-    const b = spzeros(height(p), 1);
+#==
+ = Assembly the right-hand vector.
+ =
+ = @param P  Points coordinates.
+ = @param T  Triangle connectivity.
+ = @param Q  Parallelogram connectivity.
+ = @param f  Right-hand function.
+ = @param N  Neumann boundary.
+ = @param g1 Neumann boundary values. 
+ = @return The right-hand vector for the grid.
+ =#
+function assemblyVector2D(P, T, Q, f, N=[], g1=[])
+    const b = spzeros(height(P), 1);
 
     # internal load 
-    for k in 1:height(t)
-        b[t[k,:]] += abs(det(J(k,t,p))) / 18.0 * sum(i -> f(p[t[k,i],:]), 1:3);
+    for k in 1:height(T)
+        b[T[k,:]] += abs(det(J(k,T,P))) / 18.0 * sum(i -> f(P[T[k,i],:]), 1:3);
     end
-    for k in 1:height(q)
-        b[q[k,:]] += abs(det(J(k,q,p))) / 12.0 * sum(i -> f(p[q[k,i],:]), 1:4);
+    for k in 1:height(Q)
+        b[Q[k,:]] += abs(det(J(k,Q,P))) / 12.0 * sum(i -> f(P[Q[k,i],:]), 1:4);
     end
 
     # Neumann conditions
     for i in 1:height(N)
-        b[N[i,:]] += norm(p[N[i,1],:] - p[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
+        b[N[i,:]] += norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
     end
 
     return b;

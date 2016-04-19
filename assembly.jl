@@ -16,8 +16,10 @@
 module Assembly
 
 using Support;
+using Cubature;
 
 export assemblyMass2D, assemblyStiffness2D, assemblyVector2D;
+export assemblyMass2D_nl, assemblyStiffness2D_nl;
 
 #=
  = Local mass matrix for triangular elements.
@@ -169,6 +171,116 @@ function assemblyVector2D(P, T, Q, f, N=[], g1=[])
     end
 
     return b;
+end
+
+#==
+ = Jacobian matrix for the i-th element (nonlinear transformation).
+ = 
+ = @param i Index for the element.
+ = @param E Element list.
+ = @param P Points coordinates.
+ = @return Jacobian matrix for the transformation from `E` to the reference
+ =         element.
+ =#
+function J_nl(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
+    A = P[E[i,2],:] - P[E[i,1],:];
+    B = P[E[i,1],:] - P[E[i,2],:] + P[E[i,3],:] - P[E[i,4],:];
+    C = P[E[i,4],:] - P[E[i,1],:];
+    return [A + B*x[2]; C + B*x[1]];
+end
+
+#==
+ = Assembly the stiffness matrix (nonlinear transformation).
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @param K Diffusivity tensor.
+ = @return The stiffness matrix for the grid.
+ =#
+function assemblyStiffness2D_nl(P, T, Q, K=eye(width(P)))
+    const n = height(P);
+    const W = spzeros(n, n);
+
+    # triangle assembling
+    for k in 1:height(T)
+        Jk = J(k, T, P);
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
+    end
+
+    # reference function derivatives 
+    N1x(x) = - (1 - x[2]);
+    N2x(x) = (1 - x[2]);
+    N3x(x) = x[2];
+    N4x(x) = - x[2];
+
+    N1y(x) = - (1 - x[1]);
+    N2y(x) = - x[1];
+    N3y(x) = x[1];
+    N4y(x) = (1 - x[1]);
+
+    Nx = [N1x N2x N3x N4x];
+    Ny = [N1y N2y N3y N4y];
+
+    W_K = Matrix{Float64}(4,4);
+
+    # quadrilateral assembly
+    for k in 1:height(Q)
+        for i in 1:4
+            for j in i:4
+                J(x) = J_nl(k, Q, P, x);
+                TK(x) = inv(J(x)' * inv(K') * J(x));
+                f(x) = (TK(x)[1,1] * Nx[i](x) * Nx[j](x) +
+                        TK(x)[1,2] * (Ny[i](x) * Nx[j](x) + Nx[i](x)*Ny[j](x))+
+                        TK(x)[2,2] * Ny[i](x) * Ny[j](x)
+                       ) * abs(det(J(x)));
+                W_K[i,j] = W_K[j,i] = hcubature(f, [0.0 0.0], [1.0 1.0])[1];
+            end
+        end
+        W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
+    end
+
+    return W;
+end
+
+#==
+ = Assembly the mass matrix (nonlinear transformation).
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @return The mass matrix for the grid.
+ =#
+function assemblyMass2D_nl(P, T, Q)
+    const n = height(P);
+    const M = spzeros(n, n);
+
+    # triangle assembling
+    for k in 1:height(T)
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J(k, T, P))) * M0_3;
+    end
+
+    # base functions
+    N1(x) = (1 - x[1]) * (1 - x[2]);
+    N2(x) = x[1] * (1 - x[2]);
+    N3(x) = x[1] * x[2];
+    N4(x) = (1 - x[1]) * x[2];
+    N = [N1 N2 N3 N4];
+
+    M_K = Matrix{Float64}(4,4);
+    
+    # quadrilateral assembly 
+    for k in 1:height(Q)
+        for i in 1:4
+            for j in i:4
+                f(x) = N[i](x) * N[j](x) * abs(det(J_nl(k, Q, P, x)));
+                M_K[i,j] = M_K[j,i] = hcubature(f, [0.0 0.0], [1.0 1.0])[1];
+            end
+        end
+        M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
+    end
+
+    return M;
 end
 
 end

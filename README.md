@@ -5,6 +5,15 @@ This program is a simple prototype of a solver, employing the [Finite Element Me
 
 It is implemented in [Julia](http://julialang.org/) using [matplotlib](http://matplotlib.org/).
 
+Requirements
+============
+This program is implemented in [Julia](http://julialang.org/) version 0.4, using [Cubature](https://github.com/stevengj/Cubature.jl) and [PyPlot](http://matplotlib.org/api/pyplot_api.html).
+To install the required packages, run on Julia
+```julia
+Pkg.add("PyPlot")
+Pkg.add("Cubature")
+```
+
 License
 =======
 

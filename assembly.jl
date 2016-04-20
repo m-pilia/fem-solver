@@ -190,7 +190,7 @@ function J_nl(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
 end
 
 #==
- = Assembly the stiffness matrix (nonlinear transformation).
+ = Assembly the stiffness matrix (irregular quads).
  =
  = @param P Points coordinates.
  = @param T Triangle connectivity.
@@ -244,7 +244,7 @@ function assemblyStiffness2D_nl(P, T, Q, K=eye(width(P)))
 end
 
 #==
- = Assembly the mass matrix (nonlinear transformation).
+ = Assembly the mass matrix (irregular quads).
  =
  = @param P Points coordinates.
  = @param T Triangle connectivity.

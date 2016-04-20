@@ -1,3 +1,8 @@
+#=
+ = This is a sample problem expressed by an ellyptic second order PDE on a
+ = planar domain represented with an hybrid triangle-parallelogram mesh.
+ =#
+
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or

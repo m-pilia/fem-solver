@@ -51,7 +51,7 @@ end
 #=
  = Local mass matrix for parallelogram elements.
  =#
-const M0_4 = 1.0/9.0 * [
+const M0_4 = 1.0/36.0 * [
     4 2 1 2
     2 4 2 1
     1 2 4 2

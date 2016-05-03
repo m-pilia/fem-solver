@@ -18,12 +18,13 @@
 #
 # Copyright © 2016 Martino Pilia <martino.pilia@gmail.com>
 
-include("support.jl");
-include("assembly.jl");
+@everywhere include("support.jl");
+@everywhere include("quadrature.jl");
+@everywhere include("assembly.jl");
 include("plotter.jl");
 
-using Support;
-using Assembly;
+@everywhere using Support;
+@everywhere using Assembly;
 using Plotter;
 
 # read grid vertices
@@ -60,8 +61,8 @@ f(p) = 0;
 c = 0.05;
 
 # system assembly
-W = assemblyStiffness2D(P, T, Q);
-M = assemblyMass2D(P, T, Q);
+W = assembly("stiffness", P, T, Q);
+M = assembly("mass", P, T, Q);
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
@@ -73,7 +74,7 @@ u[:,2] = u[:,1] + δ[1] * sparse(v0[:]);
 for k in 2:(height(t) - 1)
     # right-hand of the system
     g1_ = N != [] ? g1[:,k] : [];
-    b = c * δ[k]^2 * assemblyVector2D(P, T, Q, p -> 1/c * f(p), N, g1_)
+    b = c * δ[k]^2 * assembly("vector", P, T, Q, f=p->1/c*f(p), N2=N, g=g1_);
     b += (2 * M - c * δ[k]^2 * W) * u[:,k];
     b -= M * u[:,k-1];
 

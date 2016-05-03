@@ -18,12 +18,13 @@
 #
 # Copyright © 2016 Martino Pilia <martino.pilia@gmail.com>
 
-include("support.jl");
-include("assembly.jl");
+@everywhere include("support.jl");
+@everywhere include("quadrature.jl");
+@everywhere include("assembly.jl");
 include("plotter.jl");
 
-using Support;
-using Assembly;
+@everywhere using Support;
+@everywhere using Assembly;
 using Plotter;
 
 # read grid vertices
@@ -59,8 +60,8 @@ ind = setdiff(collect(1:height(P)), dir);
 f(p) = 0;
 
 # system assembly
-W = assemblyStiffness2D(P, T, Q, K);
-M = assemblyMass2D(P, T, Q);
+W = assembly("stiffness", P, T, Q, K=K);
+M = assembly("mass", P, T, Q);
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
@@ -69,14 +70,14 @@ u[:,1] = sparse(u0);
 
 # Crank-Nicolson finite differences
 b = nothing;
-b_ = assemblyVector2D(P, T, Q, f, N, g1[:,1]);
+b_ = assembly("vector", P, T, Q, f=f, N2=N, g=g1[:,1]);
 for k in 1:(length(t) - 1)
     # a copy of the assembled b_ vector is saved as `b` for the next iteration
     b = b_;
 
     # compute right-hand vector
     g1_ = N != [] ? g1[:,k+1] : [];
-    b_ = assemblyVector2D(P, T, Q, f, N, g1_);
+    b_ = assembly("vector", P, T, Q, f=f, N2=N, g=g1_);
     b[ind] += b_[ind];
     b[ind] *= 0.5 * δ[k];
     b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];

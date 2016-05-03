@@ -15,23 +15,15 @@
 
 module Assembly
 
+export assembly;
+
 using Support;
-using Cubature;
-
-export assemblyMass2D, assemblyStiffness2D, assemblyVector2D;
-export assemblyMass2D_nl, assemblyStiffness2D_nl;
-export assemblyMass3D, assemblyStiffness3D, assemblyVector3D;
-export assemblyMass3D_nl, assemblyStiffness3D_nl;
-export assemblyMass3D_nl_par, assemblyStiffness3D_nl_par;
-
-# Reference cube extrema.
-const min3 = [0.0 0.0 0.0];
-const max3 = [1.0 1.0 1.0];
+using Quadrature;
 
 #=
  = Local mass matrix for triangular elements.
  =#
-const M0_3 = 1.0/24.0 * [
+const M2T = 1.0/24.0 * [
     2 1 1
     1 2 1
     1 1 2
@@ -44,7 +36,7 @@ const M0_3 = 1.0/24.0 * [
  = @return The local stiffness matrix for the element mapped from the reference 
  =         element by J, with diffusivity K.
  =#
-function W3(T::F64Mat)
+function W2T(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
     const c = T[2,2];
@@ -58,7 +50,7 @@ end
 #=
  = Local mass matrix for parallelogram elements.
  =#
-const M0_4 = 1.0/36.0 * [
+const M2P = 1.0/36.0 * [
     4 2 1 2
     2 4 2 1
     1 2 4 2
@@ -68,11 +60,11 @@ const M0_4 = 1.0/36.0 * [
 #=
  = Stiffness local matrix for parallelogram elements.
  =
- = @param T `inv(J' * inv(K) * J)`
+ = @param T `inv(J' * inv(K') * J)`
  = @return The local stiffness matrix for the element mapped from the reference 
  =         element by J, with diffusivity K.
  =#
-function W4(T::F64Mat)
+function W2P(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
     const c = T[2,2];
@@ -84,7 +76,7 @@ function W4(T::F64Mat)
     ];
 end
 
-const M0_3T = 1.0/120.0 * [
+const M3T = 1.0/120.0 * [
     2 1 1 1
     1 2 1 1
     1 1 2 1
@@ -106,7 +98,7 @@ function W3T(T::F64Mat)
     ];
 end
 
-const M0_3H = 1.0/216.0 * [
+const M3P = 1.0/216.0 * [
     8 4 2 4 4 2 1 2
     4 8 4 2 2 4 2 1
     2 4 8 4 1 2 4 2
@@ -117,7 +109,7 @@ const M0_3H = 1.0/216.0 * [
     2 1 2 4 4 2 4 8
 ];
 
-function W3H(T::F64Mat)
+function W3P(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
     const c = T[1,3];
@@ -174,72 +166,6 @@ function W3H(T::F64Mat)
     return 1.0 / 36.0 * W;
 end
 
-# Reference square base functions.
-Q = [
-    (x) -> (1 - x[1]) * (1 - x[2])
-    (x) -> x[1] * (1 - x[2])
-    (x) -> x[1] * x[2]
-    (x) -> (1 - x[1]) * x[2]
-];
-
-# Reference square base function's derivatives .
-Qx = [
-    (x) -> - (1 - x[2])
-    (x) -> (1 - x[2])
-    (x) -> x[2]
-    (x) -> - x[2]
-];
-Qy = [
-    (x) -> - (1 - x[1])
-    (x) -> - x[1]
-    (x) -> x[1]
-    (x) -> (1 - x[1])
-];
-
-# Reference cube base functions.
-H = [
-    (x) -> x[1] * (1 - x[2]) * (1 - x[3])
-    (x) -> x[1] * x[2] * (1 - x[3])
-    (x) -> (1 - x[1]) * x[2] * (1 - x[3])
-    (x) -> (1 - x[1]) * (1 - x[2]) * (1 - x[3])
-    (x) -> x[1] * (1 - x[2]) * x[3]
-    (x) -> x[1] * x[2] * x[3]
-    (x) -> (1 - x[1]) * x[2] * x[3]
-    (x) -> (1 - x[1]) * (1 - x[2]) * x[3]
-];
-
-# Reference cube base function's derivatives.
-Hx = [
-    (x) -> (1 - x[2]) * (1 - x[3])
-    (x) -> x[2] * (1 - x[3])
-    (x) -> -x[2] * (1 - x[3])
-    (x) -> -(1 - x[2]) * (1 - x[3])
-    (x) -> (1 - x[2]) * x[3] 
-    (x) -> x[2] * x[3]
-    (x) -> -x[2] * x[3]
-    (x) -> -(1 - x[2]) * x[3]
-];
-Hy = [
-    (x) -> -x[1] * (1 - x[3])
-    (x) -> x[1] * (1 - x[3])
-    (x) -> (1 - x[1]) * (1 - x[3])
-    (x) -> -(1 - x[1]) * (1 - x[3])
-    (x) -> -x[1] * x[3]
-    (x) -> x[1] * x[3]
-    (x) -> (1 - x[1]) * x[3]
-    (x) -> -(1 - x[1]) * x[3]
-];
-Hz = [
-    (x) -> -x[1] * (1 - x[2])
-    (x) -> -x[1] * x[2]
-    (x) -> -(1 - x[1]) * x[2]
-    (x) -> -(1 - x[1]) * (1 - x[2])
-    (x) -> x[1] * (1 - x[2])
-    (x) -> x[1] * x[2]
-    (x) -> (1 - x[1]) * x[2]
-    (x) -> (1 - x[1]) * (1 - x[2])
-];
-
 #==
  = Jacobian matrix for the i-th element.
  = 
@@ -249,91 +175,8 @@ Hz = [
  = @return Jacobian matrix for the transformation from `E` to the reference
  =         element.
  =#
-function J2(i::Int64, E::I64Mat, P::F64Mat)
+function J2T(i::Int64, E::I64Mat, P::F64Mat)
     return [P[E[i,2],:]-P[E[i,1],:]; P[E[i,size(E)[2]],:]-P[E[i,1],:]]';
-end
-
-#==
- = Assembly the mass matrix.
- =
- = @param P Points coordinates.
- = @param T Triangle connectivity.
- = @param Q Parallelogram connectivity.
- = @return The mass matrix for the grid.
- =#
-function assemblyMass2D(P, T, Q)
-    const n = height(P);
-    const M = spzeros(n, n);
-
-    # triangle assembling
-    for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2(k, T, P))) * M0_3;
-    end
-
-    # parallelogram assembling
-    for k in 1:height(Q)
-        M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J2(k, Q, P))) * M0_4;
-    end
-
-    return M;
-end
-
-#==
- = Assembly the stiffness matrix.
- =
- = @param P Points coordinates.
- = @param T Triangle connectivity.
- = @param Q Parallelogram connectivity.
- = @param K Diffusivity tensor.
- = @return The stiffness matrix for the grid.
- =#
-function assemblyStiffness2D(P, T, Q, K=eye(width(P)))
-    const n = height(P);
-    const W = spzeros(n, n);
-
-    # triangle assembling
-    for k in 1:height(T)
-        Jk = J2(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
-    end
-
-    # parallelogram assembling
-    for k in 1:height(Q)
-        Jk = J2(k, Q, P);
-        W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(Jk)) * W4(inv(Jk'*inv(K')*Jk));
-    end
-
-    return W;
-end
-
-#==
- = Assembly the right-hand vector.
- =
- = @param P  Points coordinates.
- = @param T  Triangle connectivity.
- = @param Q  Parallelogram connectivity.
- = @param f  Right-hand function.
- = @param N  Neumann boundary.
- = @param g1 Neumann boundary values. 
- = @return The right-hand vector for the grid.
- =#
-function assemblyVector2D(P, T, Q, f, N=[], g1=[])
-    const b = spzeros(height(P), 1);
-
-    # internal load 
-    for k in 1:height(T)
-        b[T[k,:]] += abs(det(J2(k,T,P))) / 18.0 * sum(i -> f(P[T[k,i],:]), 1:3);
-    end
-    for k in 1:height(Q)
-        b[Q[k,:]] += abs(det(J2(k,Q,P))) / 12.0 * sum(i -> f(P[Q[k,i],:]), 1:4);
-    end
-
-    # Neumann conditions
-    for i in 1:height(N)
-        b[N[i,:]] += norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
-    end
-
-    return b;
 end
 
 #==
@@ -345,86 +188,11 @@ end
  = @return Jacobian matrix for the transformation from `E` to the reference
  =         element.
  =#
-function J2_nl(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
+function J2Q(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
     A = P[E[i,2],:] - P[E[i,1],:];
     B = P[E[i,1],:] - P[E[i,2],:] + P[E[i,3],:] - P[E[i,4],:];
     C = P[E[i,4],:] - P[E[i,1],:];
     return [A + B*x[2]; C + B*x[1]];
-end
-
-#==
- = Assembly the mass matrix (irregular quads).
- =
- = @param P Points coordinates.
- = @param T Triangle connectivity.
- = @param Q Parallelogram connectivity.
- = @return The mass matrix for the grid.
- =#
-function assemblyMass2D_nl(P, T, Q)
-    const n = height(P);
-    const M = spzeros(n, n);
-    const M_K = Matrix{Float64}(4,4);
-
-    # triangle assembling
-    for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2(k, T, P))) * M0_3;
-    end
-    
-    # quadrilateral assembly 
-    for k in 1:height(Q)
-        for i in 1:4
-            for j in i:4
-                f(x) = Q[i](x) * Q[j](x) * abs(det(J2_nl(k, Q, P, x)));
-                M_K[i,j] = M_K[j,i] = hcubature(f, [0.0 0.0], [1.0 1.0])[1];
-            end
-        end
-        M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
-    end
-
-    return M;
-end
-
-#==
- = Assembly the stiffness matrix (irregular quads).
- =
- = @param P Points coordinates.
- = @param T Triangle connectivity.
- = @param Q Parallelogram connectivity.
- = @param K Diffusivity tensor.
- = @return The stiffness matrix for the grid.
- =#
-function assemblyStiffness2D_nl(P, T, Q, K=eye(width(P)))
-    const n = height(P);
-    const W = spzeros(n, n);
-    const W_K = Matrix{Float64}(4,4);
-
-    # triangle assembling
-    for k in 1:height(T)
-        Jk = J2(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3(inv(Jk'*inv(K')*Jk));
-    end
-
-    # quadrilateral assembly
-    for k in 1:height(Q)
-        J(x) = J2_nl(k, Q, P, x);
-        TK(x) = inv(J(x)' * inv(K') * J(x));
-        for i in 1:4
-            for j in i:4
-                f = function (x) 
-                    TKx = TK(x);
-                    return abs(det(J(x))) * (
-                        TKx[1,1] * Qx[i](x) * Qx[j](x) +
-                        TKx[1,2] * (Qy[i](x) * Qx[j](x) + Qx[i](x) * Qy[j](x)) +
-                        TKx[2,2] * Qy[i](x) * Qy[j](x)
-                    );
-                end
-                W_K[i,j] = W_K[j,i] = hcubature(f, [0.0 0.0], [1.0 1.0])[1];
-            end
-        end
-        W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
-    end
-
-    return W;
 end
 
 function J3T(i::Int64, E::I64Mat, P::F64Mat)
@@ -434,14 +202,14 @@ function J3T(i::Int64, E::I64Mat, P::F64Mat)
     return [A; B; C]';
 end
 
-function J3H(i::Int64, E::I64Mat, P::F64Mat)
+function J3P(i::Int64, E::I64Mat, P::F64Mat)
     A = P[E[i,1],:] - P[E[i,4],:];
     B = P[E[i,3],:] - P[E[i,4],:];
     C = P[E[i,8],:] - P[E[i,4],:];
     return [A; B; C]';
 end
 
-function J3H_nl(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
+function J3H(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
     p = P[E[i,1:8][:],:];
     A =  p[1,:] - p[4,:] +
         (p[2,:] - p[1,:] + p[4,:] - p[3,:]) * x[2] +
@@ -461,43 +229,194 @@ function J3H_nl(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
     return [A; B; C]';
 end
 
-function assemblyMass3D(P, T, Q)
+#==
+ = Assembly the mass matrix.
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @return The mass matrix for the grid.
+ =#
+function mass2(P, T, Q, ty)
     const n = height(P);
     const M = spzeros(n, n);
 
-    # tet assembling
+    # triangle assembling
     for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) * M0_3T;
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2T(k, T, P))) * M2T;
     end
 
-    # hex assembling
-    for k in 1:height(Q)
-        M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J3H(k, Q, P))) * M0_3H;
+    # parallelogram assembling
+    if ty == "par"
+        for k in 1:height(Q)
+            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J2T(k, Q, P))) * M2P;
+        end
+    # quadrilateral assembling
+    elseif ty == "iso"
+        M_K = Matrix{Float64}(4,4);
+        for k in 1:height(Q)
+            J(x) = J2Q(k, Q, P, x);
+            for i in 1:width(Q)
+                for j in i:width(Q)
+                    M_K[i,j] = M_K[j,i] = quadQ(i, j, J);
+                end
+            end
+            M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
+        end
+    else
+        throw(DomainError("Unrecognized `ty` parameter"));
     end
 
     return M;
 end
 
-function assemblyStiffness3D(P, T, Q, K=eye(width(P)))
+#==
+ = Assembly the stiffness matrix.
+ =
+ = @param P Points coordinates.
+ = @param T Triangle connectivity.
+ = @param Q Parallelogram connectivity.
+ = @param K Diffusivity tensor.
+ = @return The stiffness matrix for the grid.
+ =#
+function stiffness2(P, T, Q, K, ty)
     const n = height(P);
     const W = spzeros(n, n);
+    const itK = inv(K');
 
-    # tet assembling
+    # triangle assembling
     for k in 1:height(T)
-        Jk = J3T(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3T(inv(Jk'*inv(K')*Jk));
+        J = J2T(k, T, P);
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) * W2T(inv(J' * itK * J));
     end
 
-    # hex assembling
-    for k in 1:height(Q)
-        Jk = J3H(k, Q, P);
-        W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(Jk)) * W3H(inv(Jk'*inv(K')*Jk));
+    # parallelogram assembling
+    if ty == "par"
+        for k in 1:height(Q)
+            J = J2T(k, Q, P);
+            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) * W2P(inv(J' * itK * J));
+        end
+    # quadrilateral assembly
+    elseif ty == "iso"
+        W_K = Matrix{Float64}(4,4);
+        for k in 1:height(Q)
+            J(x) = J2Q(k, Q, P, x);
+            for i in 1:width(Q)
+                for j in i:width(Q)
+                    W_K[i,j] = W_K[j,i] = quadDQ(i, j, J, itK);
+                end
+            end
+            W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
+        end
+    else
+        throw(DomainError("Unrecognized `ty` parameter"));
     end
 
     return W;
 end
 
-function assemblyVector3D(P, T, Q, f, N3=[], N4=[], g1=[])
+#==
+ = Assembly the right-hand vector.
+ =
+ = @param P  Points coordinates.
+ = @param T  Triangle connectivity.
+ = @param Q  Parallelogram connectivity.
+ = @param f  Right-hand function.
+ = @param N  Neumann boundary.
+ = @param g1 Neumann boundary values. 
+ = @return The right-hand vector for the grid.
+ =#
+function vector2(P, T, Q, f, N=[], g1=[])
+    const b = spzeros(height(P), 1);
+
+    # internal load 
+    for k in 1:height(T)
+        b[T[k,:]] += abs(det(J2T(k,T,P))) / 18.0 * sum(i->f(P[T[k,i],:]), 1:3);
+    end
+    for k in 1:height(Q)
+        b[Q[k,:]] += abs(det(J2T(k,Q,P))) / 12.0 * sum(i->f(P[Q[k,i],:]), 1:4);
+    end
+
+    # Neumann conditions
+    for i in 1:height(N)
+        b[N[i,:]] += norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
+    end
+
+    return b;
+end
+
+function mass3(P, T, Q, ty)
+    const n = height(P);
+    const M = spzeros(n, n);
+
+    # tet assembling
+    for k in 1:height(T)
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) * M3T;
+    end
+
+    # parallelepipeds
+    if ty == "par"
+        for k in 1:height(Q)
+            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J3P(k, Q, P))) * M3P;
+        end
+    # irregular convex hex 
+    elseif ty == "iso"
+        M_K = Matrix{Float64}(8,8);
+        for k in 1:height(Q)
+            J(x) = J3H(k, Q, P, x);
+            for i in 1:width(Q)
+                for j in i:width(Q)
+                    M_K[i,j] = M_K[j,i] = quadH(i, j, J);
+                end
+            end
+            M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
+        end
+    # unrecognized ty parameter
+    else
+        throw(DomainError("Unrecognized `ty` parameter"));
+    end
+
+    return M;
+end
+
+function stiffness3(P, T, Q, K, ty)
+    const n = height(P);
+    const W = spzeros(n, n);
+    const itK = inv(K');
+
+    # tet assembling
+    for k in 1:height(T)
+        J = J3T(k, T, P);
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) * W3T(inv(J' * itK * J));
+    end
+
+    # parallelepipeds
+    if ty == "par"
+        for k in 1:height(Q)
+            J = J3P(k, Q, P);
+            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) * W3P(inv(J' * itK * J));
+        end
+    # irregular convex hex
+    elseif ty == "iso"
+        W_K = Matrix{Float64}(8,8);
+        for k in 1:height(Q)
+            J(x) = J3H(k,Q,P,x);
+            for i in 1:width(Q)
+                for j in i:width(Q)
+                    W_K[i,j] = W_K[j,i] = quadDH(i, j, J, itK);
+                end
+            end
+            W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
+        end
+    # unrecognized ty parameter
+    else
+        throw(DomainError("Unrecognized `ty` parameter"));
+    end
+
+    return W;
+end
+
+function vector3(P, T, Q, f, N3=[], N4=[], g1=[])
     const b = spzeros(height(P), 1);
 
     # internal load 
@@ -505,102 +424,90 @@ function assemblyVector3D(P, T, Q, f, N3=[], N4=[], g1=[])
         b[T[k,:]] += abs(det(J3T(k,T,P))) / 24.0 * sum(i->f(P[T[k,i],:]), 1:4);
     end
     for k in 1:height(Q)
-        b[Q[k,:]] += abs(det(J3H(k,Q,P))) / 8.0 * sum(i->f(P[Q[k,i],:]), 1:8);
+        b[Q[k,:]] += abs(det(J3P(k,Q,P))) / 8.0 * sum(i->f(P[Q[k,i],:]), 1:8);
     end
 
     # Neumann conditions
     for i in 1:height(N3)
-        area = norm(vec(N3[i,2] - N3[i,1]) × vec(N3[i,3] - N3[i,1]));
+        p = P[N3[i,:][:],:];
+        area = norm(vec(p[2,:] - p[1,:]) × vec(p[3,:] - p[1,:]));
         b[N3[i,:]] += area * 1/3 * sum(g1[N3[i,:]]);
     end
     for i in 1:height(N4)
-        area = norm(vec(N3[i,2] - N3[i,1]) × vec(N3[i,4] - N3[i,1])) +
-               norm(vec(N3[i,2] - N3[i,3]) × vec(N3[i,4] - N3[i,3]));
+        p = P[N4[i,:][:],:];
+        area = norm(vec(p[2,:] - p[1,:]) × vec(p[4,:] - p[1,:])) +
+               norm(vec(p[2,:] - p[3,:]) × vec(p[4,:] - p[3,:]));
         b[N4[i,:]] += area * 1/4 * sum(g1[N4[i,:]]);
     end
 
     return b;
 end
 
-function assemblyMass3D_nl(P, T, Q)
-    const n = height(P);
-    const M = spzeros(n, n);
-    M_K = Matrix{Float64}(8,8);
+function assembly(o, P, T, Q; f=x->0, g=[], N2=[], N3=[], N4=[], 
+                  K=eye(width(P)), ty="iso")
 
-    # tet assembling
-    for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) * M0_3T;
-    end
-    
-    # hex assembly 
-    for k in 1:height(Q)
-        for i in 1:width(Q)
-            for j in i:width(Q)
-                f(x) = H[i](x) * H[j](x) * abs(det(J3H_nl(k, Q, P, x)));
-                M_K[i,j] = M_K[j,i] = hcubature(f, min3, max3, maxevals=300)[1];
-            end
-        end
-        M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
-    end
-
-    return M;
-end
-
-function assemblyStiffness3D_nl(P, T, Q, K=eye(width(P)))
-    const n = height(P);
-    const W = spzeros(n, n);
-    W_K = Matrix{Float64}(8,8);
-
-    # tet assembling
-    for k in 1:height(T)
-        Jk = J3T(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(Jk)) * W3T(inv(Jk'*inv(K')*Jk));
-    end
-
-    # hex assembly
-    for k in 1:height(Q)
-        J(x) = J3H_nl(k, Q, P, x);
-        TK(x) = inv(J(x)' * inv(K') * J(x));
-        for i in 1:width(Q)
-            for j in i:width(Q)
-                f = function (x) 
-                    TKx = TK(x);
-                    return abs(det(J(x))) * (
-                        TKx[1,1] *  Hx[i](x) * Hx[j](x) +
-                        TKx[2,2] *  Hy[i](x) * Hy[j](x) +
-                        TKx[3,3] *  Hz[i](x) * Hz[j](x) +
-                        TKx[1,2] * (Hy[i](x) * Hx[j](x) + Hx[i](x) * Hy[j](x)) +
-                        TKx[1,3] * (Hz[i](x) * Hx[j](x) + Hx[i](x) * Hz[j](x)) +
-                        TKx[2,3] * (Hz[i](x) * Hy[j](x) + Hy[i](x) * Hz[j](x))
-                    );
-                end
-                W_K[i,j] = W_K[j,i] = hcubature(f, min3, max3, maxevals=300)[1];
-            end
-        end
-        W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
-    end
-
-    return W;
-end
-
-function assemblyStiffness3D_nl_par(P, T, Q, K=eye(width(P)))
-    n = height(Q);
-    procsNo = min(nprocs(), CPU_CORES);
-    chunk = n ÷ procsNo;
+    procsNo = nworkers();
     Wc = Vector{RemoteRef{Channel{Any}}}(procsNo);
 
-    # divide work among threads
-    a = b = 0;
-    for i in 1:procsNo
-        a = b + 1;
-        b = min(a + chunk + 1, n);
-        Wc[i] = @spawn assemblyStiffness3D_nl(P, T, Q[a:b,:], K);
+    # table of assembly functions and arguments
+    const functions = Dict(
+        2 => Dict(
+            "mass" => (mass2, (ty,)),
+            "stiffness" => (stiffness2, (K, ty)),
+            "vector" => (vector2, (f, N2, g))),
+        3 => Dict(
+            "mass" => (mass3, (ty,)),
+            "stiffness" => (stiffness3, (K, ty)),
+            "vector" => (vector3, (f, N3, N4, g)))
+    );
+    
+    d = width(P);
+    p = height(P);
+    W = spzeros(p, p);
+    f, args = functions[d][o];
+
+    if o == "vector"
+        return f(P, T, Q, args...);
     end
 
-    # collect result from threads
-    W = fetch(Wc[1]);
-    for i in 2:procsNo
-        W += fetch(Wc[i]);
+    # tri/tet elements
+    n = height(T);
+    chunk = n ÷ procsNo;
+    if chunk == 0
+        W += f(P, T, [], args...);
+    else
+        # divide work among threads
+        a = b = 0;
+        for i in 1:procsNo
+            a = b + 1;
+            b = min(a + chunk + 1, n);
+            Wc[i] = @spawn f(P, T[a:b,:], [], args...);
+        end
+
+        # collect result from threads
+        for i in 1:procsNo
+            W += fetch(Wc[i]);
+        end
+    end
+
+    # quad/hex elements
+    n = height(Q);
+    chunk = n ÷ procsNo;
+    if chunk == 0
+        W += f(P, [], Q, args...);
+    else
+        # divide work among threads
+        a = b = 0;
+        for i in 1:procsNo
+            a = b + 1;
+            b = min(a + chunk + 1, n);
+            Wc[i] = @spawn f(P, [], Q[a:b,:], args...);
+        end
+
+        # collect result from threads
+        for i in 1:procsNo
+            W += fetch(Wc[i]);
+        end
     end
 
     return W;

@@ -16,6 +16,7 @@
 module Plotter
 
 export plotGraph3D, plotAnimation3D;
+export plotAnimationScatter3D;
 
 using PyPlot;
 using PyCall
@@ -126,6 +127,83 @@ function plotAnimation3D(P, u, t; outFile="")
         # compute and set colors for the triangles, according to z value
         colset = Float64[ (t[1][3] + t[2][3] + t[3][3]) / 3 for t in pts ];
         frame[:set_array](colset);
+
+        return [frame, timeText];
+    end
+
+    # create animation
+    a = anim.FuncAnimation(
+            fig, draw, init_func=init, blit=false, repeat_delay=1000,
+            interval=Δt, frames=height(t));
+
+    # export if requested
+    if outFile != ""
+        Writer = anim.writers[:__getitem__]("ffmpeg");
+        writer = Writer(fps=floor(Int64,1000/Δt), bitrate=1800);
+        a[:save](outFile, writer=writer);
+    end
+
+    plt[:show]();
+end
+
+function plotAnimationScatter3D(P, u, t; outFile="")
+
+    # time interval between frames
+    global Δt = 200;
+
+    fig = figure();
+    ax = Axes3D(fig);
+
+    #=
+     = Animation initialization.
+     =#
+    function init()
+        plt[:cla]();
+        # create a 3d plot with the function at time 0 
+        global frame = ax[:scatter](
+                P[:,1], P[:,2], P[:,3], c=u[:,1],
+                vmin=0, vmax=maximum(u),
+                cmap=get_cmap("jet"), linewidth=0, s=15);
+        # create a text object placed at the top (z top limit value)
+        global timeText = ax[:text](0, 0, ax[:get_zlim3d]()[2]+3, "");
+        global τ = 1;
+        global time = 0;
+
+        # initialize text
+        timeText[:set_text](@sprintf("time = %.4f", 0));
+        
+        return [frame, timeText];
+    end
+
+    #=
+     = Frame drawing.
+     = @param k Index of the frame (zero-based).
+     =#
+    function draw(k)
+        global τ, Δt, time, timeText, frame;
+
+        # compute current time
+        time += Δt / 1000.0;
+        timeText[:set_text](@sprintf("time = %.4f s", time));
+
+        # check time and update the relative index τ 
+        if time < t[τ % height(t) + 1]
+            return [frame]
+        else
+            while time >= t[τ % height(t) + 1]
+                τ += 1;
+                # restart from zero at the end of the timesteps
+                if τ > height(t)
+                    τ = 1;
+                    time = 0.0;
+                    plt[:cla](); # clear axis plot
+                end
+            end
+        end
+        println(τ)
+
+        # compute and set colors according to the `u` value at time `τ`
+        frame[:set_array](Float64[ i for i in u[:,τ] ]);
 
         return [frame, timeText];
     end

@@ -18,12 +18,13 @@
 #
 # Copyright © 2016 Martino Pilia <martino.pilia@gmail.com>
 
-include("support.jl");
-include("assembly.jl");
+@everywhere include("support.jl");
+@everywhere include("quadrature.jl");
+@everywhere include("assembly.jl");
 include("plotter.jl");
 
-using Support;
-using Assembly;
+@everywhere using Support;
+@everywhere using Assembly;
 using Plotter;
 
 # read grid vertices
@@ -52,9 +53,9 @@ c = 2;
 f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
 # system assembly
-W = assemblyStiffness2D(P, T, Q);
-M = assemblyMass2D(P, T, Q);
-b = assemblyVector2D(P, T, Q, f, N, g1);
+W = assembly("stiffness", P, T, Q, ty="par");
+M = assembly("mass", P, T, Q, ty="par");
+b = assembly("vector", P, T, Q, f=f, N2=N, g=g1);
 
 # variable for the solution
 u = spzeros(height(P), 1);

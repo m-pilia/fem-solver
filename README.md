@@ -7,11 +7,10 @@ It is implemented in [Julia](http://julialang.org/) using [matplotlib](http://ma
 
 Requirements
 ============
-This program is implemented in [Julia](http://julialang.org/) version 0.4, using [Cubature](https://github.com/stevengj/Cubature.jl) and [PyPlot](http://matplotlib.org/api/pyplot_api.html).
+This program is implemented in [Julia](http://julialang.org/) version 0.4, using [PyPlot](http://matplotlib.org/api/pyplot_api.html).
 To install the required packages, run on Julia
 ```julia
 Pkg.add("PyPlot")
-Pkg.add("Cubature")
 ```
 
 License

@@ -28,26 +28,32 @@ include("plotter.jl");
 using Plotter;
 
 # read grid vertices
-P = readArray("sample_problem_02/coordinates.dat");
+P = readArray("sample/square/coordinates.dat");
 
 # read elements
-T = readArray("sample_problem_02/elements3.dat", ty=Int64);
-Q = readArray("sample_problem_02/elements4.dat", ty=Int64);
+T = readArray("sample/square/elements3.dat", ty=Int64);
+Q = readArray("sample/square/elements4.dat", ty=Int64);
 
 # read time partition
-t = readArray("sample_problem_02/time.dat");
+t = readArray("sample/square/time.dat");
 
 # read boundary
-D = readArray("sample_problem_02/dirichlet.dat", ty=Int64);
-N = readArray("sample_problem_02/neumann.dat", ty=Int64);
+D = readArray("sample/square/dirichlet.dat", ty=Int64);
+N = readArray("sample/square/neumann.dat", ty=Int64);
 
-# read boundary conditions
-u0 = readArray("sample_problem_02/initial_distribution.dat");
-g0 = readArray("sample_problem_02/dirichlet_values.dat");
-g1 = readArray("sample_problem_02/neumann_values.dat");
+# boundary conditions (initial values/Dirichlet/Neumann)
+u0 = vectorize(x -> e^(-(x[1]^2 + x[2]^2)));
+g0(p,t) = 0;
+g1(p,t) = 0;
+
+# right-hand function
+f(p) = 0;
 
 # diffusivity tensor
-K = [0.5 0; 0 0.01];
+K = [
+    0.50  0
+    0     0.01
+];
 
 # compute dirichlet and independent nodes
 dir = unique(D);
@@ -56,9 +62,6 @@ ind = setdiff(collect(1:height(P)), dir);
 # finite time intervals
 δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
-# right-hand function
-f(p) = 0;
-
 # system assembly
 W = assembly("stiffness", P, T, Q, K=K);
 M = assembly("mass", P, T, Q);
@@ -66,26 +69,25 @@ M = assembly("mass", P, T, Q);
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
 u = spzeros(height(P), height(t));
-u[:,1] = sparse(u0);
+u[:,1] = u0(P);
 
 # Crank-Nicolson finite differences
 b = nothing;
-b_ = assembly("vector", P, T, Q, f=f, N2=N, g=g1[:,1]);
+b_ = assembly("vector", P, T, Q, f=f, N2=N, g=x->g1(x,t[1]));
 for k in 1:(length(t) - 1)
     # a copy of the assembled b_ vector is saved as `b` for the next iteration
     b = b_;
 
     # compute right-hand vector
-    g1_ = N != [] ? g1[:,k+1] : [];
-    b_ = assembly("vector", P, T, Q, f=f, N2=N, g=g1_);
+    b_ = assembly("vector", P, T, Q, f=f, N2=N, g=x->g1(x,t[k+1]));
     b[ind] += b_[ind];
     b[ind] *= 0.5 * δ[k];
     b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];
 
     # Dirichlet conditions
     if dir != []
-        b[ind] -= (M[ind,dir] + 0.5 * δ[k] * W[ind,dir]) * g0[dir,k+1];
-        u[dir,k+1] = g0[dir,k+1];
+        u[dir,k+1] = g0(P[dir], t[k+1]);
+        b[ind] -= (M[ind,dir] + 0.5 * δ[k] * W[ind,dir]) * u[dir,k+1];
     end
 
     # solution at the `k+1` timestep
@@ -93,5 +95,5 @@ for k in 1:(length(t) - 1)
 end
 
 # plot
-plotAnimation3D(P, full(u), t, outFile="diffusion.mp4");
+plotAnimation3D(P, full(u), t, outFile="video/diffusion.mp4");
 

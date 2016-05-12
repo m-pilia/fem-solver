@@ -23,7 +23,7 @@ using Quadrature;
 #=
  = Local mass matrix for triangular elements.
  =#
-const M2T = 1.0/24.0 * [
+const M2T = [
     2 1 1
     1 2 1
     1 1 2
@@ -40,7 +40,7 @@ function W2T(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
     const c = T[2,2];
-    return 1.0/2.0 * [
+    return [
         a+2*b+c  -a-b  -b-c
         -a-b     a     b
         -b-c     b     c
@@ -50,7 +50,7 @@ end
 #=
  = Local mass matrix for parallelogram elements.
  =#
-const M2P = 1.0/36.0 * [
+const M2P = [
     4 2 1 2
     2 4 2 1
     1 2 4 2
@@ -68,7 +68,7 @@ function W2P(T::F64Mat)
     const a = T[1,1];
     const b = T[1,2];
     const c = T[2,2];
-    return 1.0/6.0 * [
+    return [
         3*b+2*(a+c)  -2*a+c        -3*b-(a+c)   a-2*c
         -2*a+c       -3*b+2*(a+c)  a-2*c        3*b-(a+c)
         -3*b-(a+c)   a-2*c         3*b+2*(a+c)  -2*a+c
@@ -76,7 +76,7 @@ function W2P(T::F64Mat)
     ];
 end
 
-const M3T = 1.0/120.0 * [
+const M3T = [
     2 1 1 1
     1 2 1 1
     1 1 2 1
@@ -90,15 +90,15 @@ function W3T(T::F64Mat)
     const d = T[2,2];
     const e = T[2,3];
     const f = T[3,3];
-    return 1.0/6.0 * [
-        a        b        c        -a-b-c
-        b        d        e        -b-d-e
-        c        e        f        -c-e-f
-        -a-b-c   -b-d-e   -c-e-f   a+2*b+2*c+d+2*e+f
+    return [
+        a+2*b+2*c+d+2*e+f   -a-b-c   -b-d-e   -c-e-f
+        -a-b-c              a        b        c     
+        -b-d-e              b        d        e     
+        -c-e-f              c        e        f     
     ];
 end
 
-const M3P = 1.0/216.0 * [
+const M3P = [
     8 4 2 4 4 2 1 2
     4 8 4 2 2 4 2 1
     2 4 8 4 1 2 4 2
@@ -163,7 +163,7 @@ function W3P(T::F64Mat)
 
     W[8,8]          =  4*a + 6*b - 6*c + 4*d - 6*e + 4*f;
 
-    return 1.0 / 36.0 * W;
+    return W;
 end
 
 #==
@@ -196,9 +196,9 @@ function J2Q(i::Int64, E::I64Mat, P::F64Mat, x::Vector{Float64})
 end
 
 function J3T(i::Int64, E::I64Mat, P::F64Mat)
-    A = P[E[i,2],:] - P[E[i,1],:];
-    B = P[E[i,3],:] - P[E[i,1],:];
-    C = P[E[i,4],:] - P[E[i,1],:];
+    A = P[E[i,1],:] - P[E[i,3],:];
+    B = P[E[i,2],:] - P[E[i,3],:];
+    C = P[E[i,4],:] - P[E[i,3],:];
     return [A; B; C]';
 end
 
@@ -243,13 +243,13 @@ function mass2(P, T, Q, ty)
 
     # triangle assembling
     for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2T(k, T, P))) * M2T;
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2T(k, T, P))) / 24.0 * M2T;
     end
 
     # parallelogram assembling
     if ty == "par"
         for k in 1:height(Q)
-            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J2T(k, Q, P))) * M2P;
+            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J2T(k, Q, P))) / 36.0 * M2P;
         end
     # quadrilateral assembling
     elseif ty == "iso"
@@ -287,14 +287,14 @@ function stiffness2(P, T, Q, K, ty)
     # triangle assembling
     for k in 1:height(T)
         J = J2T(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) * W2T(inv(J' * itK * J));
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) / 2 * W2T(inv(J'*itK*J));
     end
 
     # parallelogram assembling
     if ty == "par"
         for k in 1:height(Q)
             J = J2T(k, Q, P);
-            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) * W2P(inv(J' * itK * J));
+            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) / 6 * W2P(inv(J'*itK*J));
         end
     # quadrilateral assembly
     elseif ty == "iso"
@@ -323,23 +323,25 @@ end
  = @param Q  Parallelogram connectivity.
  = @param f  Right-hand function.
  = @param N  Neumann boundary.
- = @param g1 Neumann boundary values. 
+ = @param g1 Neumann boundary function. 
  = @return The right-hand vector for the grid.
  =#
-function vector2(P, T, Q, f, N=[], g1=[])
-    const b = spzeros(height(P), 1);
+function vector2(P, T, Q, f, N=[], g1=x->0)
+    const b = zeros(height(P), 1);
 
     # internal load 
     for k in 1:height(T)
         b[T[k,:]] += abs(det(J2T(k,T,P))) / 18.0 * sum(i->f(P[T[k,i],:]), 1:3);
     end
     for k in 1:height(Q)
+        # FIXME parallelogram only jacobian, not for generic quads
         b[Q[k,:]] += abs(det(J2T(k,Q,P))) / 12.0 * sum(i->f(P[Q[k,i],:]), 1:4);
     end
 
     # Neumann conditions
     for i in 1:height(N)
-        b[N[i,:]] += norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1[N[i,:]]);
+        b[N[i,:]] += 
+            norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1(P[N[i,:][:],:]));
     end
 
     return b;
@@ -351,13 +353,13 @@ function mass3(P, T, Q, ty)
 
     # tet assembling
     for k in 1:height(T)
-        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) * M3T;
+        M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) / 120.0 * M3T;
     end
 
     # parallelepipeds
     if ty == "par"
         for k in 1:height(Q)
-            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J3P(k, Q, P))) * M3P;
+            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J3P(k, Q, P))) / 216.0 * M3P;
         end
     # irregular convex hex 
     elseif ty == "iso"
@@ -387,20 +389,20 @@ function stiffness3(P, T, Q, K, ty)
     # tet assembling
     for k in 1:height(T)
         J = J3T(k, T, P);
-        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) * W3T(inv(J' * itK * J));
+        W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) / 6 * W3T(inv(J'*itK*J));
     end
 
     # parallelepipeds
     if ty == "par"
         for k in 1:height(Q)
             J = J3P(k, Q, P);
-            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) * W3P(inv(J' * itK * J));
+            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) / 36 * W3P(inv(J'*itK*J));
         end
     # irregular convex hex
     elseif ty == "iso"
         W_K = Matrix{Float64}(8,8);
         for k in 1:height(Q)
-            J(x) = J3H(k,Q,P,x);
+            J(x) = J3H(k, Q, P, x);
             for i in 1:width(Q)
                 for j in i:width(Q)
                     W_K[i,j] = W_K[j,i] = quadDH(i, j, J, itK);
@@ -416,34 +418,36 @@ function stiffness3(P, T, Q, K, ty)
     return W;
 end
 
-function vector3(P, T, Q, f, N3=[], N4=[], g1=[])
-    const b = spzeros(height(P), 1);
+function vector3(P, T, Q, f, N3=[], N4=[], g1=x->0)
+    const b = zeros(height(P), 1);
 
     # internal load 
     for k in 1:height(T)
-        b[T[k,:]] += abs(det(J3T(k,T,P))) / 24.0 * sum(i->f(P[T[k,i],:]), 1:4);
+        b[T[k,:]] += abs(det(J3T(k,T,P))) / 96.0 * sum(i->f(P[T[k,i],:]), 1:4);
     end
     for k in 1:height(Q)
-        b[Q[k,:]] += abs(det(J3P(k,Q,P))) / 8.0 * sum(i->f(P[Q[k,i],:]), 1:8);
+        # FIXME cube only jacobian, not for generic hexes
+        b[Q[k,:]] += abs(det(J3P(k,Q,P))) / 64.0 * sum(i->f(P[Q[k,i],:]), 1:8);
+        #b[Q[k,:]] += abs(det(J3H(k,Q,P, [.5 .5 .5]))) / 64.0 * sum(i->f(P[Q[k,i],:]), 1:8);
     end
 
     # Neumann conditions
     for i in 1:height(N3)
         p = P[N3[i,:][:],:];
         area = norm(vec(p[2,:] - p[1,:]) × vec(p[3,:] - p[1,:]));
-        b[N3[i,:]] += area * 1/3 * sum(g1[N3[i,:]]);
+        b[N3[i,:]] += area * 1/3 * sum(g1(P[N3[i,:][:],:]));
     end
     for i in 1:height(N4)
         p = P[N4[i,:][:],:];
         area = norm(vec(p[2,:] - p[1,:]) × vec(p[4,:] - p[1,:])) +
                norm(vec(p[2,:] - p[3,:]) × vec(p[4,:] - p[3,:]));
-        b[N4[i,:]] += area * 1/4 * sum(g1[N4[i,:]]);
+        b[N4[i,:]] += area * 1/4 * sum(g1([N4[i,:][:],:]));
     end
 
     return b;
 end
 
-function assembly(o, P, T, Q; f=x->0, g=[], N2=[], N3=[], N4=[], 
+function assembly(o, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[], 
                   K=eye(width(P)), ty="iso")
 
     procsNo = nworkers();
@@ -466,6 +470,7 @@ function assembly(o, P, T, Q; f=x->0, g=[], N2=[], N3=[], N4=[],
     W = spzeros(p, p);
     f, args = functions[d][o];
 
+    # FIXME need this?
     if o == "vector"
         return f(P, T, Q, args...);
     end

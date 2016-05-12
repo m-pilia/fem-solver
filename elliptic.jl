@@ -28,29 +28,29 @@ include("plotter.jl");
 using Plotter;
 
 # read grid vertices
-P = readArray("sample_problem_01/coordinates.dat");
+P = readArray("sample/square/coordinates.dat");
 
 # read elements
-T = readArray("sample_problem_01/elements3.dat", ty=Int64);
-Q = readArray("sample_problem_01/elements4.dat", ty=Int64);
+T = readArray("sample/square/elements3.dat", ty=Int64);
+Q = readArray("sample/square/elements4.dat", ty=Int64);
 
 # read boundary
-D = readArray("sample_problem_01/dirichlet.dat", ty=Int64);
-N = readArray("sample_problem_01/neumann.dat", ty=Int64);
+D = readArray("sample/square/dirichlet.dat", ty=Int64);
+N = readArray("sample/square/neumann.dat", ty=Int64);
 
-# read boundary conditions
-g0 = readArray("sample_problem_01/dirichlet_values.dat");
-g1 = readArray("sample_problem_01/neumann_values.dat");
+# boundary conditions (Dirichlet/Neumann)
+g0 = vectorize(x -> sin(x[1]^2 + x[2]^2));
+g1(p) = 0;
 
-# compute dirichlet and independent nodes
-dir = unique(D);
-ind = setdiff(collect(1:height(P)), dir);
+# right-hand function
+f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
 # coefficient for the elliptic problem
 c = 2;
 
-# right-hand function
-f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
+# compute dirichlet and independent nodes
+dir = unique(D);
+ind = setdiff(collect(1:height(P)), dir);
 
 # system assembly
 W = assembly("stiffness", P, T, Q, ty="par");
@@ -61,7 +61,7 @@ b = assembly("vector", P, T, Q, f=f, N2=N, g=g1);
 u = spzeros(height(P), 1);
 
 # Dirichlet conditions
-u[dir] = g0[dir];
+u[dir] = g0(P[dir,:]);
 b[ind] -= (W[ind,dir] + c * M[ind,dir]) * u[dir];
 
 # solve the system

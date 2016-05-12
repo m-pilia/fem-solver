@@ -28,24 +28,30 @@ include("plotter.jl");
 using Plotter;
 
 # read grid vertices
-P = readArray("sample_problem_03/coordinates.dat");
+P = readArray("sample/circle/coordinates.dat");
 
 # read elements
-T = readArray("sample_problem_03/elements3.dat", ty=Int64);
-Q = readArray("sample_problem_03/elements4.dat", ty=Int64);
+T = readArray("sample/circle/elements3.dat", ty=Int64);
+Q = readArray("sample/circle/elements4.dat", ty=Int64);
 
 # read time partition
-t = readArray("sample_problem_03/time.dat");
+t = readArray("sample/circle/time.dat");
 
 # read boundary
-D = readArray("sample_problem_03/dirichlet.dat", ty=Int64);
-N = readArray("sample_problem_03/neumann.dat", ty=Int64);
+D = readArray("sample/circle/dirichlet.dat", ty=Int64);
+N = readArray("sample/circle/neumann.dat", ty=Int64);
 
-# read boundary conditions
-u0 = readArray("sample_problem_03/initial_distribution.dat");
-v0 = readArray("sample_problem_03/initial_speed.dat");
-g0 = readArray("sample_problem_03/dirichlet_values.dat");
-g1 = readArray("sample_problem_03/neumann_values.dat");
+# boundary conditions (initial values/initial speed/Dirichlet/Neumann)
+u0 = vectorize(x -> e^(-(x[1]^2 + x[2]^2)) - 1/e);
+v0(p) = 0;
+g0(p,t) = 0;
+g1(p,t) = 0;
+
+# right-hand function
+f(p) = 0;
+
+# wave speed
+c = 0.05;
 
 # compute dirichlet and independent nodes
 dir = unique(D);
@@ -54,12 +60,6 @@ ind = setdiff(collect(1:height(P)), dir);
 # finite time intervals
 δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
-# right-hand function
-f(p) = 0;
-
-# wave speed
-c = 0.05;
-
 # system assembly
 W = assembly("stiffness", P, T, Q);
 M = assembly("mass", P, T, Q);
@@ -67,21 +67,21 @@ M = assembly("mass", P, T, Q);
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
 u = spzeros(height(P), height(t));
-u[:,1] = sparse(u0);
-u[:,2] = u[:,1] + δ[1] * sparse(v0[:]);
+u[:,1] = u0(P);
+u[:,2] = u[:,1] + δ[1] * v0(P);
 
 # central finite differences
 for k in 2:(height(t) - 1)
     # right-hand of the system
-    g1_ = N != [] ? g1[:,k] : [];
-    b = c * δ[k]^2 * assembly("vector", P, T, Q, f=p->1/c*f(p), N2=N, g=g1_);
+    b = assembly("vector", P, T, Q, f=p->1/c*f(p), N2=N, g=x->g1(x,t[k]));
+    b *= c * δ[k]^2;
     b += (2 * M - c * δ[k]^2 * W) * u[:,k];
     b -= M * u[:,k-1];
 
     # Dirichlet conditions
     if dir != []
-        b[ind] -= M[ind,dir] * g0[dir,k+1];
-        u[dir,k+1] = g0[dir,k+1];
+        u[dir,k+1] = g0(P[dir], t[k+1]);
+        b[ind] -= M[ind,dir] * u[dir,k+1];
     end
 
     # solve the system
@@ -89,5 +89,5 @@ for k in 2:(height(t) - 1)
 end
 
 # plot
-plotAnimation3D(P, full(u), t, outFile="wave.mp4");
+plotAnimation3D(P, full(u), t, outFile="video/wave.mp4");
 

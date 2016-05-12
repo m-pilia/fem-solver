@@ -126,6 +126,7 @@ function plotAnimation3D(P, u, t; outFile="")
 
         # compute and set colors for the triangles, according to z value
         colset = Float64[ (t[1][3] + t[2][3] + t[3][3]) / 3 for t in pts ];
+        colset -= minimum(colset); # remove negative values 
         frame[:set_array](colset);
 
         return [frame, timeText];

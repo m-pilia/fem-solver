@@ -16,7 +16,8 @@
 module Support
 
 export I64Mat, F32Mat, F64Mat;
-export height, width, readArray;
+export height, width, readArray, readMesh;
+export vectorize;
 
 # types for matrices
 const I64Mat = Array{Int64,2};
@@ -29,7 +30,15 @@ height(a) = size(a)[1];
 # width of a matrix (2x2 array)
 width(a) = size(a)[2];
 
-# read the content of a .dat file as a bidimensional array
+#==
+ = Rread the content of a file as a bidimensional array.
+ =
+ = @param filename File name.
+ = @param first    First column to read.
+ = @param last     Last column to read.
+ = @param ty       Type for the entries.
+ = @return The resulting matrix. 
+ =#
 function readArray(filename, first=0, last=0; ty=Float64)
     matrix = [];
     try
@@ -40,6 +49,24 @@ function readArray(filename, first=0, last=0; ty=Float64)
     first = first <= 0 ? 1 : first;
     last = last <= 0 ? size(matrix)[2] : last;
     return matrix[:,first:last];
+end
+
+#==
+ = Create a vectorized version of the argument function. The resulting function 
+ = returns a scalar when applied to a single point (vector), a vector when 
+ = applied to a vector of points (matrix).
+ =
+ = @param f Single argument function to vectorize.
+ = @return Vectorized version of f.
+ =#
+function vectorize(f::Function)
+    return function (p::Array)
+        if height(p) > 1
+            return eltype(typeof(p))[ f(p[i,:]) for i in 1:height(p) ];
+        else
+            return f(p[1,:]);
+        end
+    end
 end
 
 end

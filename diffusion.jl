@@ -1,6 +1,6 @@
 #=
  = Solve a diffusion problem with constant anisotropic diffusivity over a 
- = hybrid triangle-parallelogram mesh.
+ = hybrid triangle-quadrilateral mesh.
  =#
 
 # This program is free software: you can redistribute it and/or modify

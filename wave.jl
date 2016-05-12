@@ -1,6 +1,6 @@
 #=
  = Solve the wave equation with fixed speed over a homogeneous membrane
- = represented with a hybrid triangle-parallelogram mesh.
+ = represented with a hybrid triangle-quadrilateral mesh.
  =#
 
 # This program is free software: you can redistribute it and/or modify

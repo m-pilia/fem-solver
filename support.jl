@@ -62,7 +62,11 @@ end
 function vectorize(f::Function)
     return function (p::Array)
         if height(p) > 1
-            return eltype(typeof(p))[ f(p[i,:]) for i in 1:height(p) ];
+            res = Array{eltype(typeof(p))}(height(p), length(f(p[1,:])));
+            for i in 1:height(p)
+                res[i,:] = f(p[i,:]);
+            end
+            return res;
         else
             return f(p[1,:]);
         end

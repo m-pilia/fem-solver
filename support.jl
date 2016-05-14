@@ -16,7 +16,7 @@
 module Support
 
 export I64Mat, F32Mat, F64Mat;
-export height, width, readArray, readMesh;
+export height, width, readArray, readMesh, writeMesh;
 export vectorize;
 
 # types for matrices

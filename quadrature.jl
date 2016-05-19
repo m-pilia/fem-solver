@@ -15,7 +15,7 @@
 
 module Quadrature
 
-export quadQ, quadDQ, quadH, quadDH;
+export quadQ, quadDQ, quadH, quadDH, quadDHE;
 
 using Support;
 
@@ -24,7 +24,7 @@ const _a = 0.0;
 const _b = 1.0;
 
 # Number of integration points.
-const d = 5;
+const d = 3;
 
 # Gauss-Legendre points.
 const ξ = Array{Array{Float64}}((_a + _b) / 2 + (_b - _a) / 2 * Array{Float64}[
@@ -300,6 +300,33 @@ function quadDH(i::Int64, j::Int64, J::Function, iKt::Matrix{Float64})
                 Tk = inv(Jk' * iKt * Jk);
                 B = [Tk[1,1]; Tk[1,2]; Tk[1,3]; Tk[2,2]; Tk[2,3]; Tk[3,3]];
                 res += dH[i,j,p,q,r] ⋅ B * abs(det(Jk));
+            end
+        end
+    end
+    return res;
+end
+
+function quadDHE(P::F64Mat, T::I64Mat, k::Int64, E::F64Mat, J_::Function)
+    res = zeros(24, 24);
+    for p in 1:d
+        for q in 1:d
+            for r in 1:d
+                x = [ξ[d][p]; ξ[d][q]; ξ[d][r]];
+                J = J_(x);
+                B = Matrix{Float64}(6, 24);
+                for i in 1:8
+                    ∇Nh = [fdH[i,1](x); fdH[i,2](x); fdH[i,3](x)];
+                    ∇N = inv(J') * ∇Nh;
+                    B[:,3*i-2:3*i] = [
+                        ∇N[1] 0     0    
+                        0     ∇N[2] 0
+                        0     0     ∇N[3]
+                        ∇N[2] ∇N[1] 0    
+                        0     ∇N[3] ∇N[2]
+                        ∇N[3] 0     ∇N[1]
+                    ];
+                end
+                res += ω[d][p] * ω[d][q] * ω[d][r] * B' * E * B * abs(det(J));
             end
         end
     end

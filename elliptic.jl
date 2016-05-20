@@ -40,10 +40,10 @@ N = readArray("sample/square/neumann.dat", ty=Int64);
 
 # boundary conditions (Dirichlet/Neumann)
 g0 = vectorize(x -> sin(x[1]^2 + x[2]^2));
-g1(p) = 0;
+g1 = p-> 0;
 
 # right-hand function
-f(p) = 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
+f = p -> 2*(-2*cos(p[1]^2+p[2]^2) + (1+2*p[1]^2+2*p[2]^2)*sin(p[1]^2+p[2]^2));
 
 # coefficient for the elliptic problem
 c = 2;
@@ -53,9 +53,9 @@ dir = unique(D);
 ind = setdiff(collect(1:height(P)), dir);
 
 # system assembly
-W = assembly("stiffness", P, T, Q, ty="par");
-M = assembly("mass", P, T, Q, ty="par");
-b = assembly("vector", P, T, Q, f=f, N2=N, g=g1);
+W = assembly("stiffness", P, T, Q, ty="tri3");
+M = assembly("mass", P, T, Q, ty="tri3");
+b = assembly("load", P, T, Q, f=f, N2=N, g=g1);
 
 # variable for the solution
 u = spzeros(height(P), 1);

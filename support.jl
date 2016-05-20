@@ -37,7 +37,8 @@ width(a) = size(a)[2];
  = @param first    First column to read.
  = @param last     Last column to read.
  = @param ty       Type for the entries.
- = @return The resulting matrix. 
+ = @return The resulting matrix, or an empty matrix if the file cannot be
+ =         opened.
  =#
 function readArray(filename, first=0, last=0; ty=Float64)
     matrix = [];
@@ -171,14 +172,17 @@ end
 #==
  = Create a vectorized version of the argument scalar/vector valued function. 
  = The resulting function returns a scalar/vector when applied to a single 
- = point (vector), a vector/matrix when applied to a vector of points (matrix).
+ = point (vector), a vector/matrix when applied to a vector of points (matrix),
+ = or an empty container when applied to an empty set of values.
  =
  = @param f Single argument function to vectorize.
  = @return Vectorized version of f.
  =#
 function vectorize(f::Function)
     return function (p::Array)
-        if height(p) > 1
+        if isempty(p)
+            return [];
+        elseif height(p) > 1
             res = Array{eltype(typeof(p))}(height(p), length(f(p[1,:])));
             for i in 1:height(p)
                 res[i,:] = f(p[i,:]);

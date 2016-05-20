@@ -53,9 +53,9 @@ dir = unique(D);
 ind = setdiff(collect(1:height(P)), dir);
 
 # system assembly
-W = assembly("stiffness", "tri3", P, T, Q);
-M = assembly("mass", "tri3", P, T, Q);
-b = assembly("load", "tri3", P, T, Q, f=f, N2=N, g=g1);
+W = assembly("stiffness", P, T, Q, ty="tri3");
+M = assembly("mass", P, T, Q, ty="tri3");
+b = assembly("load", P, T, Q, f=f, N2=N, g=g1);
 
 # variable for the solution
 u = spzeros(height(P), 1);

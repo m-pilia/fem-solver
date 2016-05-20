@@ -181,7 +181,7 @@ end
  = @param g1 Neumann boundary function. 
  = @return The load vector for the grid.
  =#
-function load2(P, T, Q, f, g1=x->0; N=[], N3=[], N4=[])
+function load2(P, T, Q, f, N=[], g1=x->0)
     const b = zeros(height(P), 1);
 
     # internal load 
@@ -202,7 +202,7 @@ function load2(P, T, Q, f, g1=x->0; N=[], N3=[], N4=[])
     return b;
 end
 
-function load3(P, T, Q, f, g1=x->0; N=[], N3=[], N4=[])
+function load3(P, T, Q, f, N3=[], N4=[], g1=x->0)
     const b = zeros(height(P), 1);
 
     # internal load 
@@ -231,17 +231,21 @@ function load3(P, T, Q, f, g1=x->0; N=[], N3=[], N4=[])
     return b;
 end
 
-function assembly(o, ty, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[], 
-                  K=eye(width(P)))
+function assembly(o, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[], 
+                  K=eye(width(P)), ty="")
     
     # table of assembly functions and arguments
     const functions = Dict(
         "mass" => (mass, ()),
         "stiffness" => (stiffness, (K,)),
-        "load" => (width(P) == 2 ? (load2, (g,)) : (load3, (g,)))
+        "load" => (width(P) == 2 ? (load2, (f,N2,g)) : (load3, (f,N3,N4,g)))
     );
     
     fun, args = functions[o];
+    
+    if o == "load"
+        return fun(P, T, Q, args...);
+    end
     
     function distribute(A, W, fun::Function)
         procsNo = nworkers();
@@ -250,7 +254,7 @@ function assembly(o, ty, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[],
         n = height(A);
         chunk = n ÷ procsNo;
         if chunk == 0 || procsNo == 1
-            W[:] += fun(1, n);
+            W[:] += fun(1, n)[:];
         else
             # divide work among threads
             a = b = 0;
@@ -266,33 +270,16 @@ function assembly(o, ty, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[],
             end
         end
     end
-
-    if o == "load"
-        b = zeros(height(P));
-        
-        # tri/tet elements
-        distribute(T, b, (a,b) -> fun(P, T[a:b,:], [], f, g));
-        # quad/hex elements
-        distribute(Q, b, (a,b) -> fun(P, [], Q[a:b,:], f, g));
-        # line boundary
-        distribute(N2, b, (a,b) -> fun(P, [], [], f, g, N=N2[a:b,:]));
-        # triangle boundary
-        distribute(N2, b, (a,b) -> fun(P, [], [], f, g, N3=N3[a:b,:]));
-        # quadrilateral boundary
-        distribute(N2, b, (a,b) -> fun(P, [], [], f, g, N4=N4[a:b,:]));
-        
-        return b;
-    else
-        p = height(P);
-        W = spzeros(p, p);
-        
-        # tri/tet elements
-        distribute(T, W, (a,b) -> fun(ty, P, T[a:b,:], [], args...));
-        # quad/hex elements
-        distribute(Q, W, (a,b) -> fun(ty, P, [], Q[a:b,:], args...));
-        
-        return W;
-    end
+    
+    p = height(P);
+    W = spzeros(p, p);
+    
+    # tri/tet elements
+    distribute(T, W, (a,b) -> fun(ty, P, T[a:b,:], [], args...));
+    # quad/hex elements
+    distribute(Q, W, (a,b) -> fun(ty, P, [], Q[a:b,:], args...));
+    
+    return W;
 end
 
 end

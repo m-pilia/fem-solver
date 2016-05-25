@@ -1,3 +1,7 @@
+#=
+ = Assembly matrices and vectors for scalar problems.
+ =#
+
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -8,7 +12,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License 
+# You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Copyright © 2016 Martino Pilia <martino.pilia@gmail.com>
@@ -30,161 +34,76 @@ include("elements/hexahedron8.jl");
 # pattern for mesh type
 const _PAT = "([a-zA-Z]{3}[0-9]{1,2})";
 const PAT = Regex("$_PAT(?:/$_PAT)?");
-    
+
 #==
- = Assembly the mass matrix.
+ = Assembly the mass/stiffness matrix.
  =
  = @param P Points coordinates.
  = @param T Triangle/Tetrahedron connectivity.
  = @param Q Quadrilateral/Hexahedron connectivity.
  = @param t Grid type, it is a string following the pattern "tttnn/qqqnn".
- = @return The mass matrix for the grid."
+ = @param mat Matrix to be assembled, can be `"mass"` or `"stiffness"`.
+ = @return The mass/stiffness matrix for the grid.
  =#
-function mass(t, P, T, Q)
+function matrix(t, P, T, Q, K, mat)
     const n = height(P);
     const M = spzeros(n, n);
-    
-    ty = match(PAT, t);
 
-    # triangle/tetrahedron
-    if "tri3" ∈ ty.captures
-        for k in 1:height(T)
-            M[vec(T[k,:]),vec(T[k,:])] += abs(det(J2T(k, T, P))) / 24.0 * M2T;
-        end
-    elseif "tet4" ∈ ty.captures
-        for k in 1:height(T)
-            M[vec(T[k,:]),vec(T[k,:])] += abs(det(J3T(k, T, P))) / 120.0 * M3T;
-        end
-    elseif !isempty(P)
-        throw(DomainError("Unrecognized `t` value for `T` elements"));
+    functions = if mat == "mass"
+        Dict(
+            "tri3"  => (mass_tri3,  (P, T)),
+            "tet4"  => (mass_tet4,  (P, T)),
+            "para4" => (mass_para4, (P, Q)),
+            "quad4" => (mass_quad4, (P, Q)),
+            "parp8" => (mass_parp8, (P, Q)),
+            "hex8"  => (mass_hex8,  (P, Q))
+        );
+    elseif mat == "stiffness"
+        Dict(
+            "tri3"  => (stiffness_tri3,  (P, T, K)),
+            "tet4"  => (stiffness_tet4,  (P, T, K)),
+            "para4" => (stiffness_para4, (P, Q, K)),
+            "quad4" => (stiffness_quad4, (P, Q, K)),
+            "parp8" => (stiffness_parp8, (P, Q, K)),
+            "hex8"  => (stiffness_hex8,  (P, Q, K))
+        );
+    else
+        error("Missing or unrecognized matrix type");
     end
 
-    # quadrilateral/hexahedron
-    if "par4" ∈ ty.captures
-        for k in 1:height(Q)
-            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J2T(k, Q, P))) / 36.0 * M2P;
+    regions = try
+        filter(x -> x != nothing, match(PAT, t).captures)
+    catch
+        error("Missing or unrecognized grid type");
+    end
+
+    for ty in regions
+        fun, args = try
+            functions[ty];
+        catch
+            error("Unrecognized grid type $ty");
         end
-    elseif "qua4" ∈ ty.captures
-        M_K = Matrix{Float64}(4,4);
-        for k in 1:height(Q)
-            J(x) = J2Q(k, Q, P, x);
-            for i in 1:width(Q)
-                for j in i:width(Q)
-                    M_K[i,j] = M_K[j,i] = quadQ(i, j, J);
-                end
-            end
-            M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
-        end
-    elseif "par8" ∈ ty.captures
-        for k in 1:height(Q)
-            M[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J3P(k, Q, P))) / 216.0 * M3P;
-        end
-    elseif "hex8" ∈ ty.captures
-        M_K = Matrix{Float64}(8,8);
-        for k in 1:height(Q)
-            J(x) = J3H(k, Q, P, x);
-            for i in 1:width(Q)
-                for j in i:width(Q)
-                    M_K[i,j] = M_K[j,i] = quadH(i, j, J);
-                end
-            end
-            M[vec(Q[k,:]),vec(Q[k,:])] += M_K;
-        end
-    elseif !isempty(Q)
-        throw(DomainError("Unrecognized `t` value for `Q` elements"));
+        M += fun(args...);
     end
 
     return M;
 end
 
 #==
- = Assembly the stiffness matrix.
- =
- = @param P Points coordinates.
- = @param T Triangle connectivity.
- = @param Q Parallelogram connectivity.
- = @param K Diffusivity tensor.
- = @param t Grid type, it is a string following the pattern "tttnn/qqqnn".
- = @return The stiffness matrix for the grid.
- =#
-function stiffness(t, P, T, Q, K)
-    const n = height(P);
-    const W = spzeros(n, n);
-    const itK = inv(K');
-    
-    ty = match(PAT, t);
-
-    # triangle/tetrahedron
-    if "tri3" ∈ ty.captures
-        for k in 1:height(T)
-            J = J2T(k, T, P);
-            W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) / 2 * W2T(inv(J'*itK*J));
-        end
-    elseif "tet4" ∈ ty.captures
-        for k in 1:height(T)
-            J = J3T(k, T, P);
-            W[vec(T[k,:]),vec(T[k,:])] += abs(det(J)) / 6 * W3T(inv(J'*itK*J));
-        end 
-    elseif !isempty(P)
-        throw(DomainError("Unrecognized `t` value for `T` elements"));
-    end
-
-    # quadrilateral/hexahedron
-    if "par4" ∈ ty.captures
-        for k in 1:height(Q)
-            J = J2T(k, Q, P);
-            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) / 6 * W2P(inv(J'*itK*J));
-        end
-    # quadrilateral assembly
-    elseif "qua4" ∈ ty.captures
-        W_K = Matrix{Float64}(4,4);
-        for k in 1:height(Q)
-            J(x) = J2Q(k, Q, P, x);
-            for i in 1:width(Q)
-                for j in i:width(Q)
-                    W_K[i,j] = W_K[j,i] = quadDQ(i, j, J, itK);
-                end
-            end
-            W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
-        end
-    elseif "par8" ∈ ty.captures
-        for k in 1:height(Q)
-            J = J3P(k, Q, P);
-            W[vec(Q[k,:]),vec(Q[k,:])] += abs(det(J)) / 36 * W3P(inv(J'*itK*J));
-        end
-    elseif "hex8" ∈ ty.captures
-        W_K = Matrix{Float64}(8,8);
-        for k in 1:height(Q)
-            J(x) = J3H(k, Q, P, x);
-            for i in 1:width(Q)
-                for j in i:width(Q)
-                    W_K[i,j] = W_K[j,i] = quadDH(i, j, J, itK);
-                end
-            end
-            W[vec(Q[k,:]),vec(Q[k,:])] += W_K;
-        end
-    elseif !isempty(Q)
-        throw(DomainError("Unrecognized `t` value for `Q` elements"));
-    end
-
-    return W;
-end
-
-#==
- = Assembly the load vector.
+ = Assembly the load vector for scalar 2d problems.
  =
  = @param P  Points coordinates.
  = @param T  Triangle connectivity.
  = @param Q  Parallelogram connectivity.
  = @param f  Right-hand function.
  = @param N  Neumann boundary.
- = @param g1 Neumann boundary function. 
+ = @param g1 Neumann boundary function.
  = @return The load vector for the grid.
  =#
-function load2(P, T, Q, f, N=[], g1=x->0)
+function load2(P, T, Q, f, N=Matrix{Int64}[], g1=x->0)
     const b = zeros(height(P), 1);
 
-    # internal load 
+    # internal load
     for k in 1:height(T)
         b[T[k,:]] += abs(det(J2T(k,T,P))) / 18.0 * sum(i->f(P[T[k,i],:]), 1:3);
     end
@@ -195,17 +114,28 @@ function load2(P, T, Q, f, N=[], g1=x->0)
 
     # Neumann conditions
     for i in 1:height(N)
-        b[N[i,:]] += 
+        b[N[i,:]] +=
             norm(P[N[i,1],:] - P[N[i,2],:]) * 0.5 * sum(g1(P[N[i,:][:],:]));
         end
 
     return b;
 end
 
+#==
+ = Assembly the load vector for scalar 3d problems.
+ =
+ = @param P  Points coordinates.
+ = @param T  Triangle connectivity.
+ = @param Q  Parallelogram connectivity.
+ = @param f  Right-hand function.
+ = @param N  Neumann boundary.
+ = @param g1 Neumann boundary function.
+ = @return The load vector for the grid.
+ =#
 function load3(P, T, Q, f, N3=[], N4=[], g1=x->0)
     const b = zeros(height(P), 1);
 
-    # internal load 
+    # internal load
     for k in 1:height(T)
         b[T[k,:]] += abs(det(J3T(k,T,P))) / 96.0 * sum(i->f(P[T[k,i],:]), 1:4);
     end
@@ -218,39 +148,46 @@ function load3(P, T, Q, f, N3=[], N4=[], g1=x->0)
     # Neumann conditions
     for i in 1:height(N3)
         p = P[N3[i,:][:],:];
-        area = norm(vec(p[2,:] - p[1,:]) × vec(p[3,:] - p[1,:]));
+        area = 0.5 * norm(vec(p[2,:] - p[1,:]) × vec(p[3,:] - p[1,:]));
         b[N3[i,:]] += area * 1/3 * sum(g1(P[N3[i,:][:],:]));
     end
     for i in 1:height(N4)
         p = P[N4[i,:][:],:];
-        area = norm(vec(p[2,:] - p[1,:]) × vec(p[4,:] - p[1,:])) +
-               norm(vec(p[2,:] - p[3,:]) × vec(p[4,:] - p[3,:]));
+        area = 0.5 * (abs(norm(vec(p[2,:] - p[1,:]) × vec(p[4,:] - p[1,:]))) +
+                      abs(norm(vec(p[2,:] - p[3,:]) × vec(p[4,:] - p[3,:]))));
         b[N4[i,:]] += area * 1/4 * sum(g1([N4[i,:][:],:]));
     end
 
     return b;
 end
 
-function assembly(o, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[], 
+#==
+ = Assembly a matrix or vector.
+ =#
+function assembly(o, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[],
                   K=eye(width(P)), ty="")
-    
+
     # table of assembly functions and arguments
     const functions = Dict(
-        "mass" => (mass, ()),
-        "stiffness" => (stiffness, (K,)),
+        "mass" => (matrix, ([], "mass")),
+        "stiffness" => (matrix, (K, "stiffness")),
         "load" => (width(P) == 2 ? (load2, (f,N2,g)) : (load3, (f,N3,N4,g)))
     );
-    
-    fun, args = functions[o];
-    
+
+    fun, args = try
+        functions[o];
+    catch
+        error("Unrecognized object");
+    end
+
     if o == "load"
         return fun(P, T, Q, args...);
     end
-    
+
     function distribute(A, W, fun::Function)
         procsNo = nworkers();
         Wc = Vector{RemoteRef{Channel{Any}}}(procsNo);
-        
+
         n = height(A);
         chunk = n ÷ procsNo;
         if chunk == 0 || procsNo == 1
@@ -270,15 +207,15 @@ function assembly(o, P, T, Q; f=x->0, g=x->0, N2=[], N3=[], N4=[],
             end
         end
     end
-    
+
     p = height(P);
     W = spzeros(p, p);
-    
+
     # tri/tet elements
     distribute(T, W, (a,b) -> fun(ty, P, T[a:b,:], [], args...));
     # quad/hex elements
     distribute(Q, W, (a,b) -> fun(ty, P, [], Q[a:b,:], args...));
-    
+
     return W;
 end
 

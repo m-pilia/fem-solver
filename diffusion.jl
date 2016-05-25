@@ -26,6 +26,7 @@ include("plotter.jl");
 @everywhere using Support;
 @everywhere using Assembly;
 using Plotter;
+using Pardiso;
 
 # read grid vertices
 P = readArray("sample/square/coordinates.dat");
@@ -63,23 +64,28 @@ ind = setdiff(collect(1:height(P)), dir);
 δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
 # system assembly
-W = assembly("stiffness", P, T, Q, K=K);
-M = assembly("mass", P, T, Q);
+W = assembly("stiffness", P, T, Q, K=K, ty="tri3/quad4");
+M = assembly("mass", P, T, Q, ty="tri3/quad4");
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
 u = spzeros(height(P), height(t));
 u[:,1] = u0(P);
 
+# sparse system solver
+s = MKLPardisoSolver();
+set_mtype(s, 1);
+set_nprocs(s, nworkers());
+
 # Crank-Nicolson finite differences
 b = nothing;
-b_ = assembly("vector", P, T, Q, f=f, N2=N, g=x->g1(x,t[1]));
+b_ = assembly("load", P, T, Q, f=f, N2=N, g=x->g1(x,t[1]));
 for k in 1:(length(t) - 1)
     # a copy of the assembled b_ vector is saved as `b` for the next iteration
     b = b_;
 
     # compute right-hand vector
-    b_ = assembly("vector", P, T, Q, f=f, N2=N, g=x->g1(x,t[k+1]));
+    b_ = assembly("load", P, T, Q, f=f, N2=N, g=x->g1(x,t[k+1]));
     b[ind] += b_[ind];
     b[ind] *= 0.5 * δ[k];
     b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];
@@ -91,7 +97,8 @@ for k in 1:(length(t) - 1)
     end
 
     # solution at the `k+1` timestep
-    u[ind,k+1] = (M[ind,ind] + 0.5 * δ[k] * W[ind,ind]) \ b[ind];
+    pardiso(s, u_, (M[ind,ind] + 0.5 * δ[k] * W[ind,ind]), b[ind,:]);
+    u[ind,k+1] = u_;
 end
 
 # plot

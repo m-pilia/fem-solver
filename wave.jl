@@ -26,6 +26,7 @@ include("plotter.jl");
 @everywhere using Support;
 @everywhere using Assembly;
 using Plotter;
+using Pardiso;
 
 # read grid vertices
 P = readArray("sample/circle/coordinates.dat");
@@ -61,8 +62,8 @@ ind = setdiff(collect(1:height(P)), dir);
 δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
 # system assembly
-W = assembly("stiffness", P, T, Q);
-M = assembly("mass", P, T, Q);
+W = assembly("stiffness", P, T, Q, ty="tri3/quad4");
+M = assembly("mass", P, T, Q, ty="tri3/quad4");
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
@@ -70,10 +71,15 @@ u = spzeros(height(P), height(t));
 u[:,1] = u0(P);
 u[:,2] = u[:,1] + δ[1] * v0(P);
 
+# sparse system solver
+s = MKLPardisoSolver();
+set_mtype(s, 1);
+set_nprocs(s, nworkers());
+
 # central finite differences
 for k in 2:(height(t) - 1)
     # right-hand of the system
-    b = assembly("vector", P, T, Q, f=p->1/c*f(p), N2=N, g=x->g1(x,t[k]));
+    b = assembly("load", P, T, Q, f=p->1/c*f(p), N2=N, g=x->g1(x,t[k]));
     b *= c * δ[k]^2;
     b += (2 * M - c * δ[k]^2 * W) * u[:,k];
     b -= M * u[:,k-1];
@@ -85,7 +91,8 @@ for k in 2:(height(t) - 1)
     end
 
     # solve the system
-    u[ind,k+1] = M[ind,ind] \ b[ind];
+    pardiso(s, u_, M[ind,ind], b[ind,:]);
+    u[ind,k+1] = u_;
 end
 
 # plot

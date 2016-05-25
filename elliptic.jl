@@ -26,6 +26,7 @@ include("plotter.jl");
 @everywhere using Support;
 @everywhere using Assembly;
 using Plotter;
+using Pardiso;
 
 # read grid vertices
 P = readArray("sample/square/coordinates.dat");
@@ -60,12 +61,18 @@ b = assembly("load", P, T, Q, f=f, N2=N, g=g1);
 # variable for the solution
 u = spzeros(height(P), 1);
 
+# sparse system solver
+s = MKLPardisoSolver();
+set_mtype(s, 1);
+set_nprocs(s, nworkers());
+
 # Dirichlet conditions
 u[dir] = g0(P[dir,:]);
 b[ind] -= (W[ind,dir] + c * M[ind,dir]) * u[dir];
 
 # solve the system
-u[ind] = (W[ind,ind] + c * M[ind,ind]) \ b[ind];
+pardiso(s, u_, (M[ind,ind] + c * W[ind,ind]), b[ind,:]);
+u[ind] = u_;
 
 # plot
 plotGraph3D(P, full(u));

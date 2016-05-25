@@ -1,6 +1,6 @@
 #=
  = Solve a diffusion problem with constant anisotropic diffusivity over a 
- = hybrid triangle-quadrilateral mesh.
+ = hybrid tet/hex mesh.
  =#
 
 # This program is free software: you can redistribute it and/or modify
@@ -21,39 +21,27 @@
 @everywhere include("support.jl");
 @everywhere include("quadrature.jl");
 @everywhere include("assembly.jl");
-include("plotter.jl");
 
 @everywhere using Support;
 @everywhere using Assembly;
-using Plotter;
 using Pardiso;
 
-# read grid vertices
-P = readArray("sample/square/coordinates.dat");
+P, T, Q, N3, N4 = readMesh("sample/mesh/cubespikes_tet.mesh");
+D = [];
 
-# read elements
-T = readArray("sample/square/elements3.dat", ty=Int64);
-Q = readArray("sample/square/elements4.dat", ty=Int64);
+# time partition
+t = Float64[ i*0.2 for i in 1:50 ];
 
-# read time partition
-t = readArray("sample/square/time.dat");
-
-# read boundary
-D = readArray("sample/square/dirichlet.dat", ty=Int64);
-N = readArray("sample/square/neumann.dat", ty=Int64);
-
-# boundary conditions (initial values/Dirichlet/Neumann)
-u0 = vectorize(x -> e^(-(x[1]^2 + x[2]^2)));
+# read boundary conditions
+u0 = vectorize(x -> x[3] > 0 ? 1 : 0);
 g0(p,t) = 0;
 g1(p,t) = 0;
 
-# right-hand function
-f(p) = 0;
-
 # diffusivity tensor
 K = [
-    0.50  0
-    0     0.01
+    0.003 0     0
+    0     0.003 0
+    0     0     0.003
 ];
 
 # compute dirichlet and independent nodes
@@ -63,13 +51,17 @@ ind = setdiff(collect(1:height(P)), dir);
 # finite time intervals
 δ = Float64[ t[n+1] - t[n] for n in 1:(length(t) - 1) ];
 
+# right-hand function
+f(p,t) = 0;
+
 # system assembly
-W = assembly("stiffness", P, T, Q, K=K, ty="tri3/quad4");
-M = assembly("mass", P, T, Q, ty="tri3/quad4");
+W = assembly("stiffness", P, T, Q, K=K, ty="tet4/hex8");
+M = assembly("mass", P, T, Q, ty="tet4/hex8");
 
 # variable for the solution
 # the column `k` holds the solution for the timestep `t[k]`
-u = spzeros(height(P), height(t));
+u = zeros(height(P), height(t));
+u_ = zeros(length(ind), 1);
 u[:,1] = u0(P);
 
 # sparse system solver
@@ -79,13 +71,14 @@ set_nprocs(s, nworkers());
 
 # Crank-Nicolson finite differences
 b = nothing;
-b_ = assembly("load", P, T, Q, f=f, N2=N, g=x->g1(x,t[1]));
+b_ = assembly("load", P, T, Q, f=x->f(x,t[1]), N3=N3, N4=N4, g=x->g1(x,t[1]));
 for k in 1:(length(t) - 1)
     # a copy of the assembled b_ vector is saved as `b` for the next iteration
     b = b_;
 
     # compute right-hand vector
-    b_ = assembly("load", P, T, Q, f=f, N2=N, g=x->g1(x,t[k+1]));
+    b_ = assembly("load", P, T, Q, f=x->f(x,t[k+1]), 
+            N3=N3, N4=N4, g=x->g1(x,t[k+1]));
     b[ind] += b_[ind];
     b[ind] *= 0.5 * δ[k];
     b[ind] += (M[ind,:] - 0.5 * δ[k] * W[ind,:]) * u[:,k];
@@ -101,6 +94,7 @@ for k in 1:(length(t) - 1)
     u[ind,k+1] = u_;
 end
 
-# plot
-plotAnimation3D(P, full(u), t, outFile="video/diffusion.mp4");
+writedlm("out/u.dat", full(u))
+writedlm("out/coordinates.dat", P)
+writedlm("out/time.dat", t)
 

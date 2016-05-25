@@ -15,7 +15,7 @@
 
 module Quadrature
 
-export quadQ, quadDQ, quadH, quadDH, quadDHE;
+export quadQ, quadDQ, quadH, quadDH, quadDHE, quadDHEϵ;
 
 using Support;
 
@@ -162,6 +162,18 @@ const fdH = [
     ]'
 ]';
 
+function makeω3(ω, d)
+    ω3 = Array{Float64}(d, d, d);
+    for p in 1:d
+        for q in 1:d
+            for r in 1:d
+                ω3[p,q,r] = ω[d][p] * ω[d][q] * ω[d][r];
+            end
+        end
+    end
+    return ω3;
+end
+
 function makeQ(fQ, d)
     n = length(fQ);
     Q = Array{Float64}(n, n, d, d);
@@ -249,10 +261,28 @@ function makeDH(fdH, d)
     return H;
 end
 
+function makeDHE(fdH, d)
+    n = height(fdH);
+    H = Array{Array{Float64}}(n, d, d, d);
+    for i in 1:n
+        for p in 1:d
+            for q in 1:d
+                for r in 1:d
+                    x = [ξ[d][p]; ξ[d][q]; ξ[d][r]];
+                    H[i,p,q,r] =  [fdH[i,1](x); fdH[i,2](x); fdH[i,3](x)];
+                end
+            end
+        end
+    end
+    return H;
+end
+
+const ω3 = makeω3(ω, d);
 const Q = makeQ(fQ, d);
 const dQ = makeDQ(fdQ, d);
 const H = makeH(fH, d);
 const dH = makeDH(fdH, d);
+const dHE = makeDHE(fdH, d);
 
 function quadQ(i::Int64, j::Int64, J::Function)
     res = 0.0;
@@ -308,14 +338,14 @@ end
 
 function quadDHE(P::F64Mat, T::I64Mat, k::Int64, E::F64Mat, J_::Function)
     res = zeros(24, 24);
+    B = Matrix{Float64}(6, 24);
     for p in 1:d
         for q in 1:d
             for r in 1:d
                 x = [ξ[d][p]; ξ[d][q]; ξ[d][r]];
                 J = J_(x);
-                B = Matrix{Float64}(6, 24);
                 for i in 1:8
-                    ∇Nh = [fdH[i,1](x); fdH[i,2](x); fdH[i,3](x)];
+                    ∇Nh = dHE[i,p,q,r];
                     ∇N = inv(J') * ∇Nh;
                     B[:,3*i-2:3*i] = [
                         ∇N[1] 0     0    
@@ -326,7 +356,35 @@ function quadDHE(P::F64Mat, T::I64Mat, k::Int64, E::F64Mat, J_::Function)
                         ∇N[3] 0     ∇N[1]
                     ];
                 end
-                res += ω[d][p] * ω[d][q] * ω[d][r] * B' * E * B * abs(det(J));
+                res += ω3[p,q,r] * B' * E * B * abs(det(J));
+            end
+        end
+    end
+    return res;
+end
+
+function quadDHEϵ(P::F64Mat, T::I64Mat, k::Int64, E::F64Mat, 
+        J_::Function, ϵ::F64Mat)
+    res = zeros(24, 24);
+    B = Matrix{Float64}(6, 24);
+    for p in 1:d
+        for q in 1:d
+            for r in 1:d
+                x = [ξ[d][p]; ξ[d][q]; ξ[d][r]];
+                J = J_(x);
+                for i in 1:8
+                    ∇Nh = dHE[i,p,q,r];
+                    ∇N = inv(J') * ∇Nh;
+                    B[:,3*i-2:3*i] = [
+                        ∇N[1] 0     0    
+                        0     ∇N[2] 0
+                        0     0     ∇N[3]
+                        ∇N[2] ∇N[1] 0    
+                        0     ∇N[3] ∇N[2]
+                        ∇N[3] 0     ∇N[1]
+                    ];
+                end
+                res += ω3[p,q,r] * B' * E * ϵ * abs(det(J));
             end
         end
     end
